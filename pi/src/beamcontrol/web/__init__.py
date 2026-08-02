@@ -1,0 +1,1 @@
+"""BeamControl web dashboard package."""

@@ -1,0 +1,80 @@
+name: CI
+
+on:
+  pull_request:
+  push:
+    branches: [main]
+
+permissions:
+  contents: read
+
+jobs:
+  python:
+    name: Python 3.11
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+      - uses: astral-sh/setup-uv@v5
+        with:
+          enable-cache: true
+      - run: uv python install 3.11
+      - run: uv sync --project pi --frozen --python 3.11
+      - run: uv run --project pi --frozen ruff check pi tools stm32/scripts
+      - run: uv run --project pi --frozen ruff format --check pi tools stm32/scripts
+      - run: uv run --project pi --frozen mypy pi/src/beamcontrol
+      - run: uv run --project pi --frozen pytest pi/tests tools/tests --cov=beamcontrol
+
+  c-host-tests:
+    name: Native firmware unit tests
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+      - run: make stm32-test
+
+  protocol-contract:
+    name: Protocol contract (Python <-> C)
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+      - uses: astral-sh/setup-uv@v5
+      - run: make protocol-check
+
+  firmware:
+    name: Firmware build
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/cache@v4
+        with:
+          path: |
+            .tools
+            stm32/.deps
+          key: toolchain-${{ hashFiles('tools/uv.lock', 'stm32/third_party/libopencm3.lock', 'stm32/third_party/arm-toolchain.lock') }}
+      - name: Build representative receiver firmware
+        run: make firmware NODE=1
+      - name: Show image size
+        run: .tools/arm-gnu-toolchain/bin/arm-none-eabi-size stm32/app/build/beamcontrol.elf
+
+  deployment-bundle:
+    name: Raspberry Pi 5 deployment bundle
+    runs-on: ubuntu-24.04-arm
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/cache@v4
+        with:
+          path: |
+            .tools/uv-cache
+            .tools/uv-python
+          key: pi-bundle-${{ runner.arch }}-${{ hashFiles('tools/uv.lock', 'pi/uv.lock', 'pi/pyproject.toml') }}
+      - name: Build and smoke-test ARM64 offline bundle
+        run: make pi-bundle-smoke
+      - name: Generate checksum
+        run: sha256sum build/beamcontrol-pi-*.tar.gz > build/beamcontrol-pi-SHA256SUMS.txt
+      - uses: actions/upload-artifact@v4
+        with:
+          name: beamcontrol-pi-${{ github.sha }}
+          path: |
+            build/beamcontrol-pi-*.tar.gz
+            build/beamcontrol-pi-SHA256SUMS.txt
+          if-no-files-found: error
+          retention-days: 14

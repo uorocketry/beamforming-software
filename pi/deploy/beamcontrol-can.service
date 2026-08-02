@@ -1,0 +1,16 @@
+[Unit]
+Description=Configure BeamControl SocketCAN interface
+After=sys-subsystem-net-devices-can0.device
+BindsTo=sys-subsystem-net-devices-can0.device
+Before=beamcontrol.service
+
+[Service]
+Type=oneshot
+RemainAfterExit=yes
+ExecStart=-/usr/sbin/ip link set can0 down
+ExecStart=/usr/sbin/ip link set can0 type can bitrate 500000 sample-point 0.875 sjw 1 restart-ms 100
+ExecStart=/usr/sbin/ip link set can0 up
+ExecStop=-/usr/sbin/ip link set can0 down
+
+[Install]
+WantedBy=multi-user.target

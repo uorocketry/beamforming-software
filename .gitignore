@@ -1,0 +1,23 @@
+# Tooling + fetched dependencies (gitignored; reproducible via make setup).
+/.tools/
+/stm32/.deps/
+/pi/.venv/
+/pi/dist/
+/build/
+
+# Embedded firmware: debugger submodules are VS Code tooling only, not vendored.
+stm32/debugger/cortex-debug/
+stm32/debugger/stm32f0_svd/
+
+# Python
+__pycache__/
+*.py[cod]
+.pytest_cache/
+
+# OS / editor
+.DS_Store
+*.swp
+
+# Documentation is repository-facing; keep workspace exports and binary assets out.
+/docs/raw/
+/docs/assets/

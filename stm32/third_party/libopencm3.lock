@@ -1,0 +1,5 @@
+# libopencm3 dependency pin (commit + SHA256 of the GitHub source archive).
+# Update by changing LIBOPENCM3_COMMIT, re-downloading the archive and
+# recording its sha256sum, then running `make libopencm3` + `make check`.
+LIBOPENCM3_COMMIT=607931e8a06b57e61732a9144413529eeaf370db
+LIBOPENCM3_SHA256=e7258a7b28bf9b1fe38d35ca1f2255b304a1b3202292dd6a5d7623f814c61562

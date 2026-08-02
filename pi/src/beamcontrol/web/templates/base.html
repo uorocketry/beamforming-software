@@ -1,0 +1,21 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <meta name="theme-color" content="#ffffff" />
+    <title>{% block title %}BeamControl{% endblock %}</title>
+    <link rel="stylesheet" href="/static/styles.css" />
+    <script src="/static/vendor/htmx-2.0.10.min.js" defer></script>
+  </head>
+  <body>
+    <header class="topbar">
+      <div class="brand">
+        <span class="brand-mark" aria-hidden="true"></span>
+        <div><strong>BeamControl</strong><span>Raspberry Pi receiver status</span></div>
+      </div>
+      {% include "fragments/topbar_status.html" %}
+    </header>
+    {% block content %}{% endblock %}
+  </body>
+</html>

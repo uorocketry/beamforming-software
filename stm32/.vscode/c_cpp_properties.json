@@ -1,0 +1,20 @@
+{
+  "configurations": [
+    {
+      "name": "STM32F072R8",
+      "includePath": [
+        "${workspaceFolder}/app/include",
+        "${workspaceFolder}/libopencm3/include"
+      ],
+      "defines": [
+        "STM32F0",
+        "STM32F072R8T6"
+      ],
+      "compilerPath": "arm-none-eabi-gcc",
+      "cStandard": "c17",
+      "cppStandard": "c++17",
+      "intelliSenseMode": "gcc-arm"
+    }
+  ],
+  "version": 4
+}

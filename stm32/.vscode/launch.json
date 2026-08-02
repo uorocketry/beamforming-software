@@ -1,0 +1,20 @@
+{
+  "version": "0.2.0",
+  "configurations": [
+    {
+      "type": "cortex-debug",
+      "request": "launch",
+      "name": "Debug (J-Link, STM32F072R8)",
+      "cwd": "${workspaceFolder}/app",
+      "executable": "${workspaceFolder}/app/build/beamcontrol.elf",
+      "servertype": "jlink",
+      "device": "STM32F072R8",
+      "interface": "swd",
+      "runToEntryPoint": "main",
+      "preLaunchTask": "firmware: build",
+      "gdbPath": "arm-none-eabi-gdb",
+      "showDevDebugOutput": "raw",
+      "svdFile": "${workspaceFolder}/debugger/stm32f0_svd/stm32f0/STM32F0x2.svd"
+    }
+  ]
+}

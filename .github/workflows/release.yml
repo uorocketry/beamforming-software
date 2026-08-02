@@ -1,0 +1,77 @@
+name: Release
+
+on:
+  push:
+    tags: ["v*"]
+
+permissions:
+  contents: write
+
+jobs:
+  verify:
+    name: Verify (full gate)
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+      - uses: astral-sh/setup-uv@v5
+        with:
+          enable-cache: true
+      - uses: actions/cache@v4
+        with:
+          path: |
+            .tools
+            stm32/.deps
+          key: toolchain-${{ hashFiles('tools/uv.lock', 'stm32/third_party/libopencm3.lock', 'stm32/third_party/arm-toolchain.lock') }}
+      - name: Require tag to match the package version
+        run: |
+          version="$(python3 -c 'import tomllib; print(tomllib.load(open("pi/pyproject.toml", "rb"))["project"]["version"])')"
+          test "$GITHUB_REF_NAME" = "v$version" || {
+            echo "release tag $GITHUB_REF_NAME does not match package version v$version" >&2
+            exit 1
+          }
+      - run: make check
+
+  pi-bundle:
+    name: Pi offline bundle (ARM64)
+    needs: verify
+    runs-on: ubuntu-24.04-arm
+    steps:
+      - uses: actions/checkout@v4
+      - uses: astral-sh/setup-uv@v5
+        with:
+          enable-cache: true
+      # Only Python tooling is needed here, not the ARM firmware toolchain.
+      - run: make pi-bundle-smoke
+      - name: Checksum
+        run: sha256sum build/beamcontrol-pi-*.tar.gz | tee build/beamcontrol-pi-SHA256SUMS.txt
+      - uses: actions/upload-artifact@v4
+        with:
+          name: pi-bundle
+          path: |
+            build/beamcontrol-pi-*.tar.gz
+            build/beamcontrol-pi-SHA256SUMS.txt
+
+  github-release:
+    name: Publish GitHub Release
+    needs: pi-bundle
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/download-artifact@v4
+        with:
+          path: release-artifacts
+          merge-multiple: true
+      - name: Create / update GitHub Release
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: ${{ github.ref_name }}
+          name: ${{ github.ref_name }}
+          body: |
+            Automated build of ${{ github.sha }}.
+
+            - Offline Raspberry Pi deployment bundle (`beamcontrol-pi-*.tar.gz`)
+            - STM32 firmware is built separately with an explicit receiver node ID.
+          files: |
+            release-artifacts/**/*.tar.gz
+            release-artifacts/**/*SHA256SUMS*
+          fail_on_unmatched_files: true

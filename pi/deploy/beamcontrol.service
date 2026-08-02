@@ -1,0 +1,21 @@
+[Unit]
+Description=uORocketry BeamControl CAN monitor and web dashboard
+Wants=beamcontrol-can.service
+After=beamcontrol-can.service
+
+[Service]
+Type=simple
+User=beamcontrol
+Group=beamcontrol
+ExecStart=/opt/uorocketry/beamcontrol/current/venv/bin/beamd --config /etc/uorocketry/beamcontrol.toml
+Restart=on-failure
+RestartSec=2
+
+NoNewPrivileges=true
+PrivateTmp=true
+ProtectHome=true
+ProtectSystem=strict
+ReadWritePaths=/var/lib/uorocketry/beamcontrol
+
+[Install]
+WantedBy=multi-user.target

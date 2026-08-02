@@ -1,0 +1,93 @@
+<div id="dashboard" hx-get="/fragments/dashboard" hx-trigger="every 2s" hx-swap="outerHTML" hx-sync="this:queue last">
+  <section class="summary-grid" aria-label="System summary">
+    <article class="panel summary-card">
+      <div class="card-heading">
+        <div><span class="eyebrow">Controller</span><h2>{{ system.model }}</h2></div>
+        <span class="health-badge {{ service.health }}">{{ service.health }}</span>
+      </div>
+      <dl class="detail-list">
+        <div><dt>Architecture</dt><dd>{{ system.architecture }}</dd></div>
+        <div><dt>Python</dt><dd>{{ system.python }}</dd></div>
+        <div><dt>BeamControl</dt><dd>{{ system.beamcontrol_version }}</dd></div>
+        <div><dt>Uptime</dt><dd>{{ service.uptime }}</dd></div>
+        <div><dt>Operating system</dt><dd>{{ system.operating_system }}</dd></div>
+        <div><dt>CAN address</dt><dd>{{ configuration.source_node }}</dd></div>
+      </dl>
+    </article>
+
+    <article class="panel summary-card">
+      <div class="card-heading">
+        <div><span class="eyebrow">Transport</span><h2>SocketCAN</h2></div>
+        <span class="health-badge {{ can.health }}">{{ can.health }}</span>
+      </div>
+      <dl class="detail-list">
+        <div><dt>Interface</dt><dd>{{ can.channel }}</dd></div>
+        <div><dt>Bitrate</dt><dd>{{ can.bitrate }}</dd></div>
+        <div><dt>Sample point</dt><dd>{{ can.sample_point }}</dd></div>
+        <div><dt>Last scan</dt><dd>{{ last_cycle }}{% if cycle_ms is not none %} · {{ cycle_ms }} ms{% endif %}</dd></div>
+      </dl>
+      {% if can.error %}<p class="card-error">{{ can.error }}</p>{% endif %}
+    </article>
+
+    <article class="panel summary-card">
+      <div class="card-heading">
+        <div><span class="eyebrow">Receiver boards</span><h2>{{ node_summary.online }} online</h2></div>
+        <span class="health-badge {{ service.health }}">{{ node_summary.healthy }} healthy</span>
+      </div>
+      <dl class="detail-list">
+        <div><dt>Mode</dt><dd>{{ "Scan all 1–30" if configuration.scan_mode else "Configured list" }}</dd></div>
+        <div><dt>Poll interval</dt><dd>{{ configuration.poll_interval_s }} s</dd></div>
+        <div><dt>Monitored</dt><dd>{{ node_summary.monitored }}</dd></div>
+        <div><dt>Known boards</dt><dd>{{ node_summary.displayed }}</dd></div>
+      </dl>
+    </article>
+  </section>
+
+  <section class="workspace-grid">
+    <article class="panel receiver-panel">
+      <div class="section-heading">
+        <div><span class="eyebrow">CAN receivers</span><h2>Receiver boards</h2></div>
+        <span class="section-note">One STM32 board = one CAN node</span>
+      </div>
+      {% if nodes %}
+      <div class="node-grid">
+        {% for node in nodes %}
+        <article class="node-card {{ node.health }}">
+          <div class="node-heading">
+            <div><span class="node-label">NODE</span><strong>{{ node.node_id }}</strong></div>
+            <span class="health-badge {{ node.health }}">{{ node.health }}</span>
+          </div>
+          <dl class="node-details">
+            <div><dt>Protocol</dt><dd>{{ node.protocol_version }}</dd></div>
+            <div><dt>Features</dt><dd>{{ node.feature_flags }}</dd></div>
+            <div><dt>Response</dt><dd>{{ node.response_ms ~ " ms" if node.response_ms is not none else "—" }}</dd></div>
+            <div><dt>Last seen</dt><dd>{{ node.last_seen }}</dd></div>
+          </dl>
+          {% if node.error %}<p class="node-error">{{ node.error }}</p>{% endif %}
+          <p class="channel-note">RF channels 0–3 are local to this board.</p>
+        </article>
+        {% endfor %}
+      </div>
+      {% else %}
+      <div class="empty-state">
+        <strong>No receiver boards discovered</strong>
+        <span>The monitor is scanning CAN addresses 1 through 30.</span>
+      </div>
+      {% endif %}
+    </article>
+
+    <article class="panel events-panel">
+      <div class="section-heading">
+        <div><span class="eyebrow">Monitor</span><h2>Recent events</h2></div>
+        <span class="section-note">Latest 100</span>
+      </div>
+      <ol class="event-list">
+        {% for event in events %}
+        <li class="{{ event.level }}"><time>{{ event.time }}</time><i></i><span>{{ event.message }}</span></li>
+        {% else %}
+        <li><time>—</time><i></i><span>No events yet.</span></li>
+        {% endfor %}
+      </ol>
+    </article>
+  </section>
+</div>
