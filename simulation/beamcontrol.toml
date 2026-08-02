@@ -1,0 +1,10 @@
+[beamcontrol]
+channel = "vcan0"
+source_node = 0
+poll_interval_s = 0.5
+# Instruction-level emulation is slower than the physical 20 ms response target.
+can_timeout_s = 0.5
+can_retries = 2
+nodes = [1]
+web_host = "0.0.0.0"
+web_port = 8080

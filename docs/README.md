@@ -28,6 +28,7 @@ node. Board-local components such as phase shifters and DVGAs are not CAN nodes.
 - [Developer setup](operations/developer-setup.md) — local environment and checks
 - [Raspberry Pi 5 deployment](operations/pi-provisioning.md) — installation and verification
 - [Release process](operations/releases.md) — CI artifacts and tagged releases
+- [Virtual end-to-end simulation](../simulation/README.md) — Docker, SocketCAN, and Renode
 
 Component-specific details are also documented next to their code:
 

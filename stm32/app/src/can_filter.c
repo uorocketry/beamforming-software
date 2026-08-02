@@ -17,6 +17,8 @@
 
 #define CAN_FILTER_BANK_UNICAST 0u
 #define CAN_FILTER_BANK_BROADCAST_SAFE 1u
+/* libopencm3 CAN_FIFO0 is a receive-register offset, not FIFO index 0. */
+#define CAN_FILTER_FIFO0_INDEX 0u
 
 static uint32_t can_filter_pack_extended_id(uint32_t id)
 {
@@ -70,7 +72,7 @@ bool can_filter_configure(uint8_t self_node)
         CAN_FILTER_BANK_UNICAST,
         can_filter_pack_extended_id(unicast_id),
         can_filter_pack_extended_mask(unicast_mask),
-        CAN_FIFO0,
+        CAN_FILTER_FIFO0_INDEX,
         true);
 
     /*
@@ -100,7 +102,7 @@ bool can_filter_configure(uint8_t self_node)
         CAN_FILTER_BANK_BROADCAST_SAFE,
         can_filter_pack_extended_id(broadcast_id),
         can_filter_pack_extended_mask(broadcast_mask),
-        CAN_FIFO0,
+        CAN_FILTER_FIFO0_INDEX,
         true);
 
     return true;

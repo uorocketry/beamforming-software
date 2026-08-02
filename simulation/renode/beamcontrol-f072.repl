@@ -1,0 +1,64 @@
+using "platforms/cpus/stm32f072.repl"
+
+// The generic Renode STM32F0 RCC is a flip-flop stub. This deterministic
+// model exposes the HSE/PLL and HSI48 ready/status bits used by BeamControl.
+rcc:
+    script: '''
+if request.IsInit:
+    registers = {0x00: 0x00000003, 0x04: 0x00000000, 0x24: 0x00000000, 0x34: 0x00000000}
+elif request.IsWrite:
+    value = request.Value
+    if request.Offset == 0x00:
+        value = value | 0x00000003
+        if value & (1 << 16):
+            value = value | (1 << 17)
+        if value & (1 << 24):
+            value = value | (1 << 25)
+    elif request.Offset == 0x04:
+        value = (value & ~0xC) | ((value & 0x3) << 2)
+    elif request.Offset == 0x24:
+        if value & (1 << 24):
+            value = 0
+    elif request.Offset == 0x34:
+        if value & (1 << 16):
+            value = value | (1 << 17)
+    registers[request.Offset] = value
+elif request.IsRead:
+    request.Value = registers.get(request.Offset, 0)
+'''
+
+// Renode 1.16.1 does not model the F0 independent watchdog or flash control
+// registers. These shims acknowledge the register accesses used at startup;
+// watchdog expiry and flash timing are covered by hardware-level tests.
+iwdg: Python.PythonPeripheral @ sysbus 0x40003000
+    size: 0x400
+    initable: true
+    script: '''
+if request.IsRead:
+    request.Value = 0
+'''
+
+flashInterface: Python.PythonPeripheral @ sysbus 0x40022000
+    size: 0x400
+    initable: true
+    script: '''
+if request.IsInit:
+    acr = 0
+elif request.IsWrite and request.Offset == 0:
+    acr = request.Value
+elif request.IsRead and request.Offset == 0:
+    request.Value = acr
+elif request.IsRead:
+    request.Value = 0
+'''
+
+// STM32F072 combines all bxCAN sources on NVIC interrupt 30.
+canIrq: Miscellaneous.CombinedInput @ none
+    numberOfInputs: 4
+    -> nvic@30
+
+can:
+    [0-3] -> canIrq@[0-3]
+
+phaseDevice: Mocks.DummySPISlave @ spi2
+vgaDevice: Mocks.DummySPISlave @ spi1

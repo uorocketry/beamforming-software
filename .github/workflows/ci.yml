@@ -19,8 +19,8 @@ jobs:
           enable-cache: true
       - run: uv python install 3.11
       - run: uv sync --project pi --frozen --python 3.11
-      - run: uv run --project pi --frozen ruff check pi tools stm32/scripts
-      - run: uv run --project pi --frozen ruff format --check pi tools stm32/scripts
+      - run: uv run --project pi --frozen ruff check pi tools stm32/scripts simulation/tests
+      - run: uv run --project pi --frozen ruff format --check pi tools stm32/scripts simulation/tests
       - run: uv run --project pi --frozen mypy pi/src/beamcontrol
       - run: uv run --project pi --frozen pytest pi/tests tools/tests --cov=beamcontrol
 
@@ -54,6 +54,8 @@ jobs:
         run: make firmware NODE=1
       - name: Show image size
         run: .tools/arm-gnu-toolchain/bin/arm-none-eabi-size stm32/app/build/beamcontrol.elf
+      - name: Run virtual end-to-end simulation
+        run: make simulation-test
 
   deployment-bundle:
     name: Raspberry Pi 5 deployment bundle

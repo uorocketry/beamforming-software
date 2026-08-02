@@ -17,7 +17,7 @@ export UV_CACHE_DIR UV_PYTHON_INSTALL_DIR UV_PROJECT_ENVIRONMENT
 .PHONY: help doctor quickstart setup setup-safety tools toolchain libopencm3 libopencm3-build
 .PHONY: pi-sync pi-test pi-lint pi-format pi-build pi-bundle pi-bundle-smoke
 .PHONY: stm32-test firmware firmware-check firmware-size
-.PHONY: protocol-check test check clean distclean
+.PHONY: protocol-check simulation-test simulation-up simulation-down test check clean distclean
 
 help:
 	@printf '%s\n' \
@@ -32,6 +32,7 @@ help:
 		'  make test               Run Python, native firmware, and protocol tests' \
 		'  make check              Run lint, tests, and one representative firmware build' \
 		'  make pi-lint            Run Ruff, formatting, and mypy checks' \
+		'  make simulation-test    Run Docker + Renode end-to-end simulation' \
 		'' \
 		'Firmware:' \
 		'  make firmware NODE=1    Build one receiver-board image with CAN node ID 1' \
@@ -84,13 +85,13 @@ pi-test: $(UV)
 	$(UV) run --project pi --frozen pytest pi/tests tools/tests
 
 pi-lint: $(UV)
-	$(UV) run --project pi --frozen ruff check pi tools stm32/scripts
-	$(UV) run --project pi --frozen ruff format --check pi tools stm32/scripts
+	$(UV) run --project pi --frozen ruff check pi tools stm32/scripts simulation/tests
+	$(UV) run --project pi --frozen ruff format --check pi tools stm32/scripts simulation/tests
 	$(UV) run --project pi --frozen mypy pi/src/beamcontrol
 
 pi-format: $(UV)
-	$(UV) run --project pi ruff check --fix pi tools stm32/scripts
-	$(UV) run --project pi ruff format pi tools stm32/scripts
+	$(UV) run --project pi ruff check --fix pi tools stm32/scripts simulation/tests
+	$(UV) run --project pi ruff format pi tools stm32/scripts simulation/tests
 
 pi-build: $(UV)
 	$(UV) build --project pi --wheel
@@ -134,6 +135,17 @@ protocol-check: $(UV)
 	$(UV) run --project pi \
 		python tools/generate-protocol-vectors.py --check
 	$(UV) run --project pi --frozen pytest pi/tests/contract
+
+## Docker + Renode functional simulation.
+simulation-test:
+	./simulation/run.sh
+
+simulation-up:
+	$(MAKE) firmware NODE=1
+	docker compose -f simulation/compose.yml up --build
+
+simulation-down:
+	docker compose -f simulation/compose.yml down --volumes --remove-orphans
 
 ## Aggregate targets.
 test: pi-test stm32-test protocol-check

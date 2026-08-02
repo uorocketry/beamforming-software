@@ -176,6 +176,8 @@ The default structure is:
 channel = "can0"
 source_node = 0
 poll_interval_s = 1.0
+can_timeout_s = 0.020
+can_retries = 2
 # Empty means discover all receiver-board nodes 1 through 30.
 nodes = []
 web_host = "0.0.0.0"

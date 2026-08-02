@@ -35,6 +35,7 @@ The protocol uses controller node `0`, receiver-board nodes `1..30`, and broadca
 | `pi/` | Python 3.11 controller package, CLI, FastAPI dashboard, and Raspberry Pi deployment files |
 | `stm32/` | STM32F072 firmware for one receiver board |
 | `protocol/` | Shared Python/C protocol vectors |
+| `simulation/` | Docker Compose, Renode platform, and virtual end-to-end test |
 | `tools/` | Reproducible setup, diagnostics, bundle building, and checks |
 | `docs/` | Current architecture, operations, and hardware design notes |
 
@@ -49,6 +50,14 @@ make check
 
 `make check` runs linting, all host tests, the protocol contract, and one representative
 STM32 build. CI does not prebuild firmware for arbitrary receiver addresses.
+
+Run the real controller and STM32 ELF together over container-local virtual CAN with:
+
+```bash
+make simulation-test
+```
+
+See [`simulation/README.md`](simulation/README.md) for scope and interactive use.
 
 ## Build STM32 firmware
 

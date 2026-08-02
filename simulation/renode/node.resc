@@ -1,0 +1,27 @@
+mach create "beamcontrol-node-1"
+machine LoadPlatformDescription @/simulation/renode/beamcontrol-f072.repl
+sysbus LoadELF @/firmware/beamcontrol.elf
+
+# Log the actual peripheral-register values before Renode's generic SPI model
+# narrows them. This preserves the complete 13-bit phase-shifter command.
+sysbus SetHookBeforePeripheralWrite sysbus.spi1 "machine.Log(LogLevel.Info, 'SIM_SPI1 offset=0x{0:X} value=0x{1:X}', offset, value)"
+sysbus SetHookBeforePeripheralWrite sysbus.spi2 "machine.Log(LogLevel.Info, 'SIM_SPI2 offset=0x{0:X} value=0x{1:X}', offset, value)"
+sysbus SetHookBeforePeripheralWrite sysbus.gpioPortA "machine.Log(LogLevel.Info, 'SIM_GPIOA offset=0x{0:X} value=0x{1:X}', offset, value)"
+sysbus SetHookBeforePeripheralWrite sysbus.gpioPortB "machine.Log(LogLevel.Info, 'SIM_GPIOB offset=0x{0:X} value=0x{1:X}', offset, value)"
+sysbus SetHookBeforePeripheralWrite sysbus.gpioPortC "machine.Log(LogLevel.Info, 'SIM_GPIOC offset=0x{0:X} value=0x{1:X}', offset, value)"
+
+cpu AddHook `sysbus GetSymbolAddress "diagnostics_mark_healthy"` "machine.Log(LogLevel.Info, 'SIM_FIRMWARE_READY node=1')"
+cpu AddHook `sysbus GetSymbolAddress "cec_can_isr"` "machine.Log(LogLevel.Debug, 'SIM_CAN_ISR')"
+
+emulation CreateCANHub "canHub"
+connector Connect can canHub
+machine CreateSocketCANBridge "socketcan" "vcan0"
+connector Connect socketcan canHub
+
+# Hide known limitations of the generic SPI model; hooks above retain the
+# values and GPIO ordering needed by this functional simulation.
+logLevel 3 sysbus.spi1
+logLevel 3 sysbus.spi2
+
+start
+sleep 1000000

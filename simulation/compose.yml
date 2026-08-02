@@ -1,0 +1,71 @@
+name: beamcontrol-simulation
+
+services:
+  canbus:
+    build:
+      context: ..
+      dockerfile: simulation/canbus.Dockerfile
+    cap_add:
+      - NET_ADMIN
+    ports:
+      - "127.0.0.1:${BEAMCONTROL_SIM_PORT:-18080}:8080"
+    healthcheck:
+      test: ["CMD", "ip", "link", "show", "dev", "vcan0"]
+      interval: 1s
+      timeout: 1s
+      retries: 15
+
+  renode:
+    image: antmicro/renode@sha256:fc2a8c1bad2296a6d7cbc852bbf5540b22b778bdeb0ad42a45b8c54ea1e6a24c
+    network_mode: "service:canbus"
+    user: "0:0"
+    depends_on:
+      canbus:
+        condition: service_healthy
+    volumes:
+      - ../stm32/app/build/beamcontrol.elf:/firmware/beamcontrol.elf:ro
+      - ./renode:/simulation/renode:ro
+      - results:/results
+    command: ["/simulation/renode/run.sh"]
+    healthcheck:
+      test: ["CMD-SHELL", "grep -q 'SIM_FIRMWARE_READY node=1' /results/renode.log"]
+      interval: 1s
+      timeout: 1s
+      retries: 30
+
+  controller:
+    image: beamcontrol-simulation-controller:local
+    build:
+      context: ..
+      dockerfile: simulation/controller.Dockerfile
+    network_mode: "service:canbus"
+    depends_on:
+      canbus:
+        condition: service_healthy
+      renode:
+        condition: service_healthy
+    command: ["beamd", "--config", "/simulation/beamcontrol.toml"]
+    healthcheck:
+      test:
+        - CMD
+        - python
+        - -c
+        - "import urllib.request; urllib.request.urlopen('http://127.0.0.1:8080/healthz', timeout=2)"
+      interval: 1s
+      timeout: 3s
+      retries: 30
+
+  e2e:
+    image: beamcontrol-simulation-controller:local
+    network_mode: "service:canbus"
+    depends_on:
+      controller:
+        condition: service_healthy
+      renode:
+        condition: service_healthy
+    volumes:
+      - results:/results:ro
+    command: ["python", "/simulation/tests/e2e.py"]
+
+volumes:
+  results:

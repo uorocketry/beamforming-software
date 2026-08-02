@@ -71,7 +71,12 @@ def _default_client_factory(
     config: BeamControlConfig,
 ) -> tuple[ClientLike, Callable[[], None]]:
     transport = SocketCanTransport(config.channel)
-    client = BeamControlClient(transport, source_node=config.source_node)
+    client = BeamControlClient(
+        transport,
+        source_node=config.source_node,
+        timeout=config.can_timeout_s,
+        retries=config.can_retries,
+    )
     return client, transport.close
 
 
@@ -359,6 +364,8 @@ class BeamControlMonitor:
             "configuration": {
                 "source_node": self.config.source_node,
                 "poll_interval_s": self.config.poll_interval_s,
+                "can_timeout_s": self.config.can_timeout_s,
+                "can_retries": self.config.can_retries,
                 "scan_mode": not bool(self.config.nodes),
                 "target_nodes": self.config.nodes,
                 "web_host": self.config.web_host,
