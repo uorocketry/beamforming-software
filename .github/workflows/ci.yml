@@ -55,7 +55,12 @@ jobs:
       - name: Show image size
         run: .tools/arm-gnu-toolchain/bin/arm-none-eabi-size stm32/app/build/beamcontrol.elf
       - name: Enable virtual CAN kernel support
-        run: sudo modprobe vcan
+        run: |
+          if ! sudo modprobe vcan; then
+            sudo apt-get update
+            sudo apt-get install --yes --no-install-recommends "linux-modules-extra-$(uname -r)"
+            sudo modprobe vcan
+          fi
       - name: Run virtual end-to-end simulation
         run: make simulation-test
 
