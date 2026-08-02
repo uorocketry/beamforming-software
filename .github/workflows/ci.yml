@@ -54,6 +54,8 @@ jobs:
         run: make firmware NODE=1
       - name: Show image size
         run: .tools/arm-gnu-toolchain/bin/arm-none-eabi-size stm32/app/build/beamcontrol.elf
+      - name: Enable virtual CAN kernel support
+        run: sudo modprobe vcan
       - name: Run virtual end-to-end simulation
         run: make simulation-test
 

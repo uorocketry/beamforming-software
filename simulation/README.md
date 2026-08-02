@@ -14,8 +14,10 @@ Renode, and test runner share that namespace. No CAN interface is created on the
 
 ## Run
 
-Docker and Docker Compose are required. The Linux Docker kernel must support SocketCAN `vcan`.
-The repository setup must already provide the ARM toolchain and libopencm3.
+Docker and Docker Compose are required. The Linux Docker kernel must support SocketCAN `vcan`,
+and the module must be loaded. On distributions that build it as a module, run
+`sudo modprobe vcan` once before starting the simulation. The repository setup must already
+provide the ARM toolchain and libopencm3.
 
 ```bash
 make simulation-test

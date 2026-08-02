@@ -35,6 +35,7 @@ services:
 
   controller:
     image: beamcontrol-simulation-controller:local
+    pull_policy: never
     build:
       context: ..
       dockerfile: simulation/controller.Dockerfile
@@ -57,6 +58,7 @@ services:
 
   e2e:
     image: beamcontrol-simulation-controller:local
+    pull_policy: never
     network_mode: "service:canbus"
     depends_on:
       controller:
