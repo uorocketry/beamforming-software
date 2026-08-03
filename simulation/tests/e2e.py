@@ -113,7 +113,12 @@ def main() -> int:
     )
     assert_subsequence(
         values(text, "SPI2", 0xC),
-        [0x092C, 0x0024, 0x0058, 0x0008],
+        [
+            0x162C,  # startup: calibrated state 146, address 3
+            0x17C4,  # SET_PHASE: calibrated state 128, address 2
+            0x0058,  # SET_COMBINED: calibrated state 64, address 1
+            0x0008,  # ENTER_SAFE: calibrated state 0, address 1
+        ],
         "phase-shifter SPI writes",
     )
 
