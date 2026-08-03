@@ -1,4 +1,5 @@
 #include "beamforming_protocol.h"
+#include "phase_lookup_2_4_ghz.h"
 
 #include <assert.h>
 #include <stdbool.h>
@@ -10,13 +11,21 @@ static void test_known_phase_command(void)
     uint8_t state = 0u;
     assert(phase_state_from_millidegrees(205300u, &state));
     assert(state == 146u);
-    assert(phase_control_word_from_state(state) == 0x08du);
+    assert(PE44820_OPTIMIZED_STATE_146 == 0x08d);
+    assert(pe44820_optimized_state_by_index_2_4_ghz[state]
+        == PE44820_OPTIMIZED_STATE_146);
+    assert(phase_control_word_from_state(state)
+        == (uint16_t)PE44820_OPTIMIZED_STATE_146);
 
     uint16_t command = 0;
     assert(phase_command_from_millidegrees(205300u, 3u, &command));
     assert(command == 0x162cu);
 
-    assert(phase_control_word_from_state(1u) == 0x101u);
+    assert(PE44820_OPTIMIZED_STATE_1 == 0x101);
+    assert(pe44820_optimized_state_by_index_2_4_ghz[1u]
+        == PE44820_OPTIMIZED_STATE_1);
+    assert(phase_control_word_from_state(1u)
+        == (uint16_t)PE44820_OPTIMIZED_STATE_1);
     assert(phase_command_from_state(1u, 3u, &command));
     assert(command == 0x101cu);
 }

@@ -57,7 +57,7 @@ protocol.
 Valid application values are:
 
 - `channel`: `0..3`
-- `phase_state`: `0..255`, interpreted as an index into the receiver's 2.4 GHz phase lookup
+- `phase_state`: `0..255`, interpreted as an index into the receiver's calibrated 2.4 GHz phase enum
 - `attenuation_db`: `0..23` in 1 dB steps
 
 Unused payload bytes must be zero. A command may use its minimum DLC or a longer zero-padded

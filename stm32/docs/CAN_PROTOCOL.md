@@ -59,9 +59,10 @@ Sequence numbers provide request/response correlation only. Commands are absolut
 - `phase_address`: `0..15`
 - `attenuation_db`: `0..23`
 
-The PE44820 OPT bit is not sent over CAN. Firmware looks up the complete calibrated 9-bit
-`OPT + D7:D0` control word for the requested state index, then adds the unit address to form
-the 13-bit serial command.
+The PE44820 OPT bit is not sent over CAN. Firmware uses the state byte to index the
+`pe44820_optimized_state_t` enum mapping, obtaining the complete calibrated 9-bit
+`OPT + D7:D0` control word. It then adds the unit address to form the 13-bit serial command.
+A direct cast from the sequential state index to the nonsequential enum value is not valid.
 
 The safety command has the numerically lowest type field, so it wins CAN arbitration against every other protocol message type.
 

@@ -9,17 +9,19 @@ the RF IC command words.
 `SET_PHASE` and `SET_COMBINED` carry an 8-bit `phase_state` in the range `0..255`. The byte is a
 logical phase index, not the PE44820 `D7:D0` field itself.
 
-Firmware indexes the calibrated 2.4 GHz table in
-`stm32/app/include/phase_lookup_2_4_ghz.h`. Each entry is the complete 9-bit PE44820 control
-word:
+Firmware defines the calibrated 2.4 GHz words as `pe44820_optimized_state_t` enum constants
+in `stm32/app/include/phase_lookup_2_4_ghz.h`. Each enum value is the complete 9-bit PE44820
+control word:
 
 ```text
 bit 8     OPT
 bits 7:0  D7:D0
 ```
 
-The table was extracted from the `2.4GHz` worksheet of `PE44820_Lookup_3Feb2025.xlsx`. A
-reviewable export is stored in `docs/PE44820_Lookup_2.4GHz.csv`.
+The enum was extracted from the `2.4GHz` worksheet of `PE44820_Lookup_3Feb2025.xlsx`. A
+reviewable export is stored in `docs/PE44820_Lookup_2.4GHz.csv`. An indexed enum table converts
+the sequential CAN state number to the nonsequential enum value; directly casting the CAN index
+to `pe44820_optimized_state_t` would be incorrect.
 
 In serial mode the PE44820 consumes a 13-bit program word in this logical order:
 
@@ -32,7 +34,7 @@ Because the STM32 SPI block transmits MSB first, firmware reverses the looked-up
 and four address bits before packing. `OPT` comes directly from bit 8 of the calibrated word:
 
 ```text
-phase_word = phase_lookup_2_4_ghz[phase_state]
+phase_word = pe44820_optimized_state_by_index_2_4_ghz[phase_state]
 
 command = (reverse8(phase_word & 0xff) << 5)
         | (((phase_word >> 8) & 1) << 4)

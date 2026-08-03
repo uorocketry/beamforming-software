@@ -21,7 +21,7 @@ uint16_t beamforming_reverse_bits(uint16_t word, uint8_t bit_count)
 
 uint16_t phase_control_word_from_state(uint8_t phase_state)
 {
-    return phase_control_word_by_state_2_4_ghz[phase_state];
+    return (uint16_t)pe44820_optimized_state_by_index_2_4_ghz[phase_state];
 }
 
 bool phase_command_from_state(uint8_t phase_state, uint8_t unit_address, uint16_t *command)
