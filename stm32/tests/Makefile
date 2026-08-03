@@ -8,7 +8,7 @@ TARGETS := test_protocol test_diagnostics test_can_protocol test_can_queue test_
 
 all: $(TARGETS)
 
-test_protocol: test_protocol.c ../app/src/beamforming_protocol.c ../app/include/beamforming_protocol.h
+test_protocol: test_protocol.c ../app/src/beamforming_protocol.c ../app/include/beamforming_protocol.h ../app/include/PhaseShifter.h ../app/include/Vga.h ../app/include/PhaseStateEnum.h
 	$(CC) $(CPPFLAGS) $(CFLAGS) $(filter %.c,$^) -o $@
 
 test_diagnostics: test_diagnostics.c ../app/src/diagnostic_record.c ../app/include/diagnostic_record.h
@@ -20,7 +20,7 @@ test_can_protocol: test_can_protocol.c ../app/src/can_protocol.c ../app/include/
 test_can_queue: test_can_queue.c ../app/src/can_queue.c ../app/include/can_queue.h ../app/include/can_protocol.h
 	$(CC) $(CPPFLAGS) $(CFLAGS) $(filter %.c,$^) -o $@
 
-test_can_control: test_can_control.c ../app/src/can_control.c ../app/src/beamforming_protocol.c ../app/include/can_control.h ../app/include/can_protocol.h ../app/include/beamforming_protocol.h
+test_can_control: test_can_control.c ../app/src/can_control.c ../app/src/beamforming_protocol.c ../app/include/can_control.h ../app/include/can_protocol.h ../app/include/beamforming_protocol.h ../app/include/PhaseShifter.h ../app/include/Vga.h ../app/include/PhaseStateEnum.h
 	$(CC) $(CPPFLAGS) $(CFLAGS) $(filter %.c,$^) -o $@
 
 test_build_info: test_build_info.c ../app/src/build_info.c ../app/include/build_info.h ../app/include/firmware_config.h

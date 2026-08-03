@@ -1,5 +1,7 @@
 #include "can_control.h"
 
+#include "PhaseShifter.h"
+#include "Vga.h"
 #include "beamforming_protocol.h"
 
 #include <stddef.h>
@@ -25,11 +27,12 @@ static can_command_result_t append_phase(
     uint8_t phase_address,
     can_control_plan_t *plan)
 {
-    uint16_t command = 0u;
-    if (!phase_command_from_state(phase_state, phase_address, &command)) {
+    if (phase_address > PHASE_COMMAND_ADDRESS_MASK) {
         return CAN_COMMAND_RESULT_INVALID_PAYLOAD;
     }
 
+    const optimizedPhaseState_e phaseState = GetOptimizedPhaseState(phase_state);
+    const uint16_t command = MakePSCommand(phaseState, phase_address);
     const can_command_result_t result =
         append_operation(plan, CAN_CONTROL_OPERATION_PHASE, command);
     if (result != CAN_COMMAND_RESULT_OK) {
@@ -44,7 +47,7 @@ static can_command_result_t append_phase(
 static can_command_result_t append_vga(uint8_t attenuation_db, can_control_plan_t *plan)
 {
     uint8_t command = 0u;
-    if (!vga_command_from_attenuation(attenuation_db, &command)) {
+    if (!MakeVGACommand(attenuation_db, &command)) {
         return CAN_COMMAND_RESULT_INVALID_PAYLOAD;
     }
 

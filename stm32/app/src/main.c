@@ -83,11 +83,11 @@ int main(void)
     diagnostics_set_clock(clock_source);
     diagnostics_set_state(FIRMWARE_STATE_CLOCK_READY);
 
-    vga_setup();
-    phase_shifter_setup();
+    f0480spisetup();
+    pe448spisetup();
 
     uint8_t vga_command = 0u;
-    if (!vga_command_from_attenuation(SAFE_VGA_ATTENUATION_DB, &vga_command)) {
+    if (!MakeVGACommand(SAFE_VGA_ATTENUATION_DB, &vga_command)) {
         firmware_fail(FIRMWARE_FAULT_VGA_COMMAND);
     }
 
@@ -95,14 +95,12 @@ int main(void)
         ? SAFE_PHASE_MILLIDEGREES
         : OPERATIONAL_PHASE_MILLIDEGREES;
     uint8_t phase_state = 0u;
-    uint16_t phase_command = 0u;
-    if (!phase_state_from_millidegrees(requested_phase, &phase_state)
-        || !phase_command_from_state(
-            phase_state,
-            PHASE_SHIFTER_ADDRESS,
-            &phase_command)) {
+    if (!phase_state_from_millidegrees(requested_phase, &phase_state)) {
         firmware_fail(FIRMWARE_FAULT_PHASE_COMMAND);
     }
+
+    const optimizedPhaseState_e phaseState = GetOptimizedPhaseState(phase_state);
+    const uint16_t phase_command = MakePSCommand(phaseState, PHASE_SHIFTER_ADDRESS);
 
     diagnostics_set_commands(phase_command, vga_command);
 

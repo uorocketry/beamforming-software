@@ -12,7 +12,7 @@ static void control_line_timing_margin(void)
     __asm__ volatile("nop");
 }
 
-void phase_shifter_setup(void)
+void pe448spisetup(void)
 {
     rcc_periph_clock_enable(RCC_SPI2);
     rcc_periph_clock_enable(RCC_GPIOB);

@@ -1,3 +1,4 @@
+#include "PhaseShifter.h"
 #include "can_control.h"
 #include "beamforming_protocol.h"
 
@@ -93,8 +94,8 @@ static void test_combined_plan_uses_safe_transition_order(void)
     command.phase_address = 4u;
     command.attenuation_db = 12u;
 
-    uint16_t expected_phase = 0u;
-    assert(phase_command_from_state(64u, 4u, &expected_phase));
+    const optimizedPhaseState_e phaseState = GetOptimizedPhaseState(64u);
+    const uint16_t expected_phase = MakePSCommand(phaseState, 4u);
 
     can_control_plan_t plan = {0};
     assert(can_control_plan_command(&command, &current, &plan) == CAN_COMMAND_RESULT_OK);
@@ -158,6 +159,18 @@ static void test_ping_has_no_hardware_actions(void)
     assert(plan.resulting_state.attenuation_db == current.attenuation_db);
 }
 
+static void test_invalid_phase_address(void)
+{
+    const can_control_state_t current = initial_state();
+    can_command_t command = command_of(CAN_MESSAGE_SET_PHASE);
+    command.phase_state = 0u;
+    command.phase_address = 16u;
+
+    can_control_plan_t plan = {0};
+    assert(can_control_plan_command(&command, &current, &plan)
+        == CAN_COMMAND_RESULT_INVALID_PAYLOAD);
+}
+
 static void test_invalid_arguments_and_unsupported_types(void)
 {
     const can_control_state_t current = {0};
@@ -179,6 +192,7 @@ int main(void)
     test_combined_plan_avoids_duplicate_max_attenuation_write();
     test_safe_plan_forces_maximum_attenuation_and_zero_phase();
     test_ping_has_no_hardware_actions();
+    test_invalid_phase_address();
     test_invalid_arguments_and_unsupported_types();
     puts("CAN control tests passed");
     return 0;

@@ -10,7 +10,7 @@ static void control_line_timing_margin(void)
     __asm__ volatile("nop");
 }
 
-void vga_setup(void)
+void f0480spisetup(void)
 {
     rcc_periph_clock_enable(RCC_SPI1);
     rcc_periph_clock_enable(RCC_GPIOA);

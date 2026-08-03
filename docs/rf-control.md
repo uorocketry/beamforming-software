@@ -9,8 +9,8 @@ the RF IC command words.
 `SET_PHASE` and `SET_COMBINED` carry an 8-bit `phase_state` in the range `0..255`. The byte is a
 logical phase index, not the PE44820 `D7:D0` field itself.
 
-Firmware defines the calibrated 2.4 GHz words as `pe44820_optimized_state_t` enum constants
-in `stm32/app/include/phase_lookup_2_4_ghz.h`. Each C2x binary literal shows the complete
+Firmware defines the calibrated 2.4 GHz words as `optimizedPhaseState_e` enum constants
+in `stm32/app/include/PhaseStateEnum.h`. Each C2x binary literal shows the complete
 9-bit PE44820 control word directly:
 
 ```text
@@ -21,7 +21,7 @@ bits 7:0  D7:D0
 The enum was extracted from the `2.4GHz` worksheet of `PE44820_Lookup_3Feb2025.xlsx`. A
 reviewable export is stored in `docs/PE44820_Lookup_2.4GHz.csv`. An indexed enum table converts
 the sequential CAN state number to the nonsequential enum value; directly casting the CAN index
-to `pe44820_optimized_state_t` would be incorrect.
+to `optimizedPhaseState_e` would be incorrect.
 
 In serial mode the PE44820 consumes a 13-bit program word in this logical order:
 
@@ -34,11 +34,14 @@ Because the STM32 SPI block transmits MSB first, firmware reverses the looked-up
 and four address bits before packing. `OPT` comes directly from bit 8 of the calibrated word:
 
 ```text
-phase_word = pe44820_optimized_state_by_index_2_4_ghz[phase_state]
+phase_state_enum = GetOptimizedPhaseState(phase_state)
 
-command = (reverse8(phase_word & 0xff) << 5)
-        | (((phase_word >> 8) & 1) << 4)
-        | reverse4(unit_address)
+command = MakePSCommand(phase_state_enum, unit_address)
+
+MakePSCommand:
+    (reverseBits(phase_state_enum & 0xff, 8) << 5)
+  | (((phase_state_enum >> 8) & 1) << 4)
+  | reverseBits(unit_address, 4)
 ```
 
 For approximately 205.3 degrees, the logical index is `146`. The 2.4 GHz lookup maps that index
@@ -48,6 +51,23 @@ to 9-bit word `0x08D` (`010001101`). At unit address `3`, the resulting 13-bit c
 Some logical indices intentionally map to the same hardware word because the calibration table
 selects the closest measured state. The CAN protocol continues to transmit only the one-byte
 logical index; the frequency-specific hardware mapping remains on the STM32.
+
+
+## CANDev-compatible API
+
+The RF helpers intentionally reuse the names and compact function boundaries from the
+STM32Beamforming `CANDev` branch:
+
+- `reverseBits()` reverses a field before serial packing;
+- `GetOptimizedPhaseState()` converts the sequential CAN `stateWordTableIndex` to the
+  nonsequential `optimizedPhaseState_e` value;
+- `MakePSCommand()` forms the 13-bit PE44820 command;
+- `pe448spisetup()` and `f0480spisetup()` retain the chip-specific setup names.
+
+The pure builders remain in `beamforming_protocol.c` so they can be tested on the host without
+linking STM32 peripheral code. The guarded `phase_shifter_write()` and `vga_write()` functions
+remain separate because they add bounded waits, fault propagation, and explicit one-way-write
+semantics that were not present in CANDev.
 
 ## F0480 DVGA
 
