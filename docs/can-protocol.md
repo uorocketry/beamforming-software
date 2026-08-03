@@ -58,7 +58,7 @@ Valid application values are:
 
 - `channel`: `0..3`
 - `phase_state`: `0..255`
-- `attenuation_db`: `0..23`
+- `attenuation_db`: `0..23` in 1 dB steps
 
 Unused payload bytes must be zero. A command may use its minimum DLC or a longer zero-padded
 DLC, but an exact retry must preserve the original identifier, DLC, and payload bytes.
@@ -91,8 +91,11 @@ ACK or ERROR frames.
 2. Program the phase shifter.
 3. Apply the final requested attenuation.
 
-An ACK is sent only after all steps complete. Recoverable failures leave attenuation at 23 dB.
-Fatal SPI failures reset the firmware, so the controller observes a missing response.
+An ACK is sent only after all STM32-side validation and SPI transfer steps complete. The RF
+control buses are transmit-only on the receiver PCB, so ACK does **not** mean that the PE44820
+or F0480 returned a device acknowledgement or that the resulting RF state was measured.
+Recoverable failures leave attenuation at 23 dB. Fatal SPI-controller failures reset the
+firmware, so the controller observes a missing response.
 
 ## Capability discovery
 

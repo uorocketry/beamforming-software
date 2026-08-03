@@ -59,13 +59,15 @@ static void test_bit_reversal(void)
 
 static void test_vga_commands(void)
 {
-    for (uint8_t attenuation = 0; attenuation <= VGA_MAX_ATTENUATION_DB; ++attenuation) {
-        uint8_t command = 0;
+    for (uint8_t attenuation = 0u; attenuation <= VGA_MAX_ATTENUATION_DB; ++attenuation) {
+        uint8_t command = 0u;
         assert(vga_command_from_attenuation(attenuation, &command));
-        assert(command == (uint8_t)(attenuation << VGA_ATTENUATION_SHIFT));
+        assert(command == (uint8_t)(attenuation << VGA_COMMAND_ATTENUATION_SHIFT));
     }
 
-    uint8_t command = 0;
+    uint8_t command = 0u;
+    assert(vga_command_from_attenuation(3u, &command));
+    assert(command == 0x0cu);
     assert(vga_command_from_attenuation(23u, &command));
     assert(command == 0x5cu);
     assert(!vga_command_from_attenuation(24u, &command));

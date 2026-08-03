@@ -53,6 +53,7 @@ void phase_shifter_setup(void)
         SPI_CR1_MSBFIRST);
     spi_set_data_size(SPI2, SPI_CR2_DS_13BIT);
     spi_fifo_reception_threshold_16bit(SPI2);
+    /* The receiver PCB does not route PE44820 SDO readback to the STM32. */
     spi_set_bidirectional_transmit_only_mode(SPI2);
     spi_enable_software_slave_management(SPI2);
     spi_set_nss_high(SPI2);
@@ -82,5 +83,6 @@ spi_guard_status_t phase_shifter_write(uint16_t command, uint32_t timeout_millis
     control_line_timing_margin();
     gpio_set(SPI2_PS_LE_PORT, SPI2_PS_LE_PIN);
     control_line_timing_margin();
+    /* This confirms only MCU-side transfer completion; there is no device ACK. */
     return SPI_GUARD_OK;
 }

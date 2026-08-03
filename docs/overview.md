@@ -109,10 +109,11 @@ In simple terms, the original code proved that the STM32 could talk to the RF co
 BeamControl turns that proof of concept into a remotely operated, continuously supervised,
 testable receiver-board controller.
 
-The current firmware is still not a substitute for hardware qualification. It cannot confirm
-that an external RF device physically accepted an SPI command because there is no device
-readback, and real CAN electrical behavior and RF performance must still be measured on the
-board.
+The current firmware is still not a substitute for hardware qualification. The board does not
+route a return data line from either RF control device to the STM32. A CAN ACK therefore means
+the STM32 completed its validated transmit sequence, not that an RF device acknowledged the
+word or that the resulting RF state was measured. Real SPI timing, CAN electrical behavior,
+and RF performance must still be measured on the board.
 
 ## Web dashboard
 

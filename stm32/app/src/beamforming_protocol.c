@@ -20,12 +20,16 @@ bool phase_command_from_state(uint8_t phase_state, uint8_t unit_address, uint16_
         return false;
     }
 
-    const uint16_t phase_field = beamforming_reverse_bits(phase_state, 8u);
-    const uint16_t address_field = beamforming_reverse_bits(unit_address, 4u);
+    const uint16_t phase_field = beamforming_reverse_bits(phase_state, PHASE_STATE_BITS);
+    const uint16_t address_field =
+        beamforming_reverse_bits(unit_address, PHASE_UNIT_ADDRESS_BITS);
     const uint16_t option_field =
         ((phase_state & PHASE_OPTION_STATE_BIT) != 0u) ? PHASE_COMMAND_OPTION_MASK : 0u;
 
-    *command = (uint16_t)((phase_field << 5u) | option_field | address_field);
+    *command = (uint16_t)(
+        (phase_field << PHASE_COMMAND_PHASE_SHIFT)
+        | option_field
+        | (address_field & PHASE_COMMAND_ADDRESS_MASK));
     return true;
 }
 
@@ -64,6 +68,6 @@ bool vga_command_from_attenuation(uint8_t attenuation_db, uint8_t *command)
         return false;
     }
 
-    *command = (uint8_t)(attenuation_db << VGA_ATTENUATION_SHIFT);
+    *command = (uint8_t)(attenuation_db << VGA_COMMAND_ATTENUATION_SHIFT);
     return true;
 }

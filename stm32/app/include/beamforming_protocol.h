@@ -4,19 +4,25 @@
 #include <stdbool.h>
 #include <stdint.h>
 
+#define PHASE_STATE_BITS 8u
 #define PHASE_STATE_COUNT 256u
 #define PHASE_FULL_TURN_MILLIDEGREES 360000u
+#define PHASE_UNIT_ADDRESS_BITS 4u
+#define PHASE_COMMAND_PHASE_SHIFT 5u
+#define PHASE_COMMAND_OPTION_SHIFT 4u
+#define PHASE_COMMAND_ADDRESS_MASK 0x000fu
 #define PHASE_OPTION_STATE_BIT 0x40u
-#define PHASE_COMMAND_OPTION_MASK 0x0010u
+#define PHASE_COMMAND_OPTION_MASK (1u << PHASE_COMMAND_OPTION_SHIFT)
 #define PHASE_COMMAND_MAX 0x1fffu
 
 #define VGA_MAX_ATTENUATION_DB 23u
-#define VGA_ATTENUATION_SHIFT 2u
+#define VGA_COMMAND_ATTENUATION_SHIFT 2u
 
 uint16_t beamforming_reverse_bits(uint16_t word, uint8_t bit_count);
 bool phase_state_from_millidegrees(
     uint32_t requested_shift_millidegrees,
     uint8_t *phase_state);
+/* Form the PE44820 13-bit serial word: D7:D0, synchronized OPT, and A3:A0. */
 bool phase_command_from_state(uint8_t phase_state, uint8_t unit_address, uint16_t *command);
 bool phase_command_from_millidegrees(
     uint32_t requested_shift_millidegrees,

@@ -82,6 +82,11 @@ Python tests and one representative cross-compiled firmware build.
 | Phase-shifter bus | SPI2 |
 | DVGA bus | SPI1 |
 
+Both RF-control buses are wired transmit-only on the receiver PCB. Firmware waits for the
+STM32 SPI peripheral to finish before releasing latch/chip-select, but neither RF IC returns an
+acknowledgement to the MCU. A CAN ACK therefore confirms local command execution only; it is
+not RF-device readback. See [`../docs/rf-control.md`](../docs/rf-control.md).
+
 Deployment still depends on PCB-level safe defaults during power-up. See
 [`docs/HARDWARE_VALIDATION.md`](docs/HARDWARE_VALIDATION.md).
 

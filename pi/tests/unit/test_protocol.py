@@ -55,12 +55,12 @@ class TestValidation(unittest.TestCase):
             with self.assertRaises(ValueError):
                 P.validate_payload(ch)
 
-    def test_attenuation_0_23(self):
-        for a in (0, 23):
-            P.validate_payload(0, atten_db=a)
-        for a in (24, 255):
+    def test_attenuation_uses_every_1_db_step(self):
+        for attenuation in range(P.ATTEN_DB_MAX + 1):
+            P.validate_payload(0, atten_db=attenuation)
+        for attenuation in (24, 255):
             with self.assertRaises(ValueError):
-                P.validate_payload(0, atten_db=a)
+                P.validate_payload(0, atten_db=attenuation)
 
     def test_phase_state_0_255(self):
         for p in (0, 255):

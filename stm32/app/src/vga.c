@@ -42,6 +42,7 @@ void vga_setup(void)
         SPI_CR1_LSBFIRST);
     spi_set_data_size(SPI1, SPI_CR2_DS_8BIT);
     spi_fifo_reception_threshold_8bit(SPI1);
+    /* The F0480 three-wire control bus has no return data line on this PCB. */
     spi_set_bidirectional_transmit_only_mode(SPI1);
     spi_enable_software_slave_management(SPI1);
     spi_set_nss_high(SPI1);
@@ -67,5 +68,6 @@ spi_guard_status_t vga_write(uint8_t command, uint32_t timeout_millis)
     control_line_timing_margin();
     gpio_set(SPI1_VGA_CSB_PORT, SPI1_VGA_CSB_PIN);
     control_line_timing_margin();
+    /* This confirms only MCU-side transfer completion; there is no device ACK. */
     return SPI_GUARD_OK;
 }
