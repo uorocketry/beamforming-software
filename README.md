@@ -28,8 +28,8 @@ of the implemented software or CAN protocol.
 The protocol uses controller node `0`, receiver-board nodes `1..30`, and broadcast address
 `31`. See [`docs/can-protocol.md`](docs/can-protocol.md).
 
-For a concise explanation suitable for a walkthrough or presentation, see
-[`docs/overview.md`](docs/overview.md).
+For a concise explanation suitable for a walkthrough or presentation—including what was
+added beyond the original STM32 prototype—see [`docs/overview.md`](docs/overview.md).
 
 ## Repository layout
 

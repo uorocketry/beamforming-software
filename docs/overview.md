@@ -76,6 +76,44 @@ Phase shifter for channel 2 is programmed
 Pi confirms that the command completed
 ```
 
+## What was added beyond the original STM32 prototype
+
+The original `stm32beamforming` code was a hardware bring-up program. It configured SPI,
+wrote one hard-coded phase-shifter command, and then stopped. The VGA driver was present, but
+the active program did not initialize or use it.
+
+BeamControl keeps the same basic SPI device-control idea and expands it into production-style
+receiver firmware:
+
+| Area | Original STM32 prototype | BeamControl |
+|:--|:--|:--|
+| Main behavior | Sends one phase command and stops | Runs continuously as a CAN-controlled receiver node |
+| Remote control | None | CAN commands for discovery, phase, attenuation, combined updates, and safe mode |
+| Addressing | Hard-coded local device address | Receiver-board node `1..30` plus RF channel `0..3` |
+| VGA use | Driver existed but was unused by `main` | Initialized at boot and controlled through CAN |
+| SPI completion | Wrote data and raised latch/CS immediately | Waits for TX-ready and transfer completion with bounded timeouts |
+| Safe phase changes | None | Applies maximum attenuation before changing phase, then restores attenuation |
+| Validation | Minimal | Checks CAN IDs, frame type, lengths, ranges, reserved bytes, and broadcast rules |
+| Retries | None | Sequence numbers and replay handling avoid repeating completed RF operations |
+| Fault handling | Debug breakpoint or infinite loop | Records faults, resets, and can enter safe lockout after repeated incomplete boots |
+| Watchdog | None | Independent watchdog supervises the running firmware |
+| Diagnostics | None | Boot count, reset flags, fault history, clock source, and last RF commands are retained |
+| CAN robustness | No CAN | Acceptance filters, RX/TX queues, priorities, retransmission, and bus-off recovery |
+| Testing | Manual hardware experiments | Native C tests, Python/C protocol tests, cross-builds, and Docker/Renode E2E simulation |
+
+The project also corrected issues present in the old codebase, including a phase-conversion
+integer-division error, inconsistent function types that prevented modern compilation, and
+raising SPI latch signals without explicitly waiting for the transfer to finish.
+
+In simple terms, the original code proved that the STM32 could talk to the RF control chips.
+BeamControl turns that proof of concept into a remotely operated, continuously supervised,
+testable receiver-board controller.
+
+The current firmware is still not a substitute for hardware qualification. It cannot confirm
+that an external RF device physically accepted an SPI command because there is no device
+readback, and real CAN electrical behavior and RF performance must still be measured on the
+board.
+
 ## Web dashboard
 
 `beamd` serves a compact FastAPI/Jinja2/HTMX dashboard. It shows:
