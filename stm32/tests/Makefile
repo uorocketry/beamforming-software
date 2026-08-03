@@ -1,5 +1,5 @@
 CC ?= cc
-CFLAGS ?= -std=c17 -Wall -Wextra -Werror -pedantic -O2
+CFLAGS ?= -std=c2x -Wall -Wextra -Werror -pedantic -O2
 CPPFLAGS += -I../app/include -I../../protocol/generated
 
 TARGETS := test_protocol test_diagnostics test_can_protocol test_can_queue test_can_control test_build_info test_can_tx_queue test_protocol_vectors

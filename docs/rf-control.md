@@ -10,8 +10,8 @@ the RF IC command words.
 logical phase index, not the PE44820 `D7:D0` field itself.
 
 Firmware defines the calibrated 2.4 GHz words as `pe44820_optimized_state_t` enum constants
-in `stm32/app/include/phase_lookup_2_4_ghz.h`. Each enum value is the complete 9-bit PE44820
-control word:
+in `stm32/app/include/phase_lookup_2_4_ghz.h`. Each C2x binary literal shows the complete
+9-bit PE44820 control word directly:
 
 ```text
 bit 8     OPT

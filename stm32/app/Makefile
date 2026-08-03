@@ -27,7 +27,7 @@ CFILES := \
 	src/watchdog.c
 
 INCLUDES += -Iinclude
-CSTD := -std=c17
+CSTD := -std=c2x
 OPT ?= -Os
 
 GIT_REVISION ?= $(shell git rev-parse --verify HEAD 2>/dev/null || printf unknown)
