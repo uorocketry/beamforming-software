@@ -23,6 +23,7 @@ node. Board-local components such as phase shifters and DVGAs are not CAN nodes.
 
 ## Documents
 
+- [Project overview](overview.md) — short explanation, command flow, simulation, and test scope
 - [CAN protocol v1.1](can-protocol.md) — implemented Python/C wire contract
 - [Firmware](firmware.md) — STM32 target and build entry points
 - [Developer setup](operations/developer-setup.md) — local environment and checks
