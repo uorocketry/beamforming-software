@@ -10,10 +10,15 @@ static void test_known_phase_command(void)
     uint8_t state = 0u;
     assert(phase_state_from_millidegrees(205300u, &state));
     assert(state == 146u);
+    assert(phase_control_word_from_state(state) == 0x08du);
 
     uint16_t command = 0;
     assert(phase_command_from_millidegrees(205300u, 3u, &command));
-    assert(command == 0x092cu);
+    assert(command == 0x162cu);
+
+    assert(phase_control_word_from_state(1u) == 0x101u);
+    assert(phase_command_from_state(1u, 3u, &command));
+    assert(command == 0x101cu);
 }
 
 static void test_phase_boundaries(void)
@@ -40,14 +45,22 @@ static void test_phase_boundaries(void)
 static void test_every_phase_state(void)
 {
     for (uint16_t state = 0; state < PHASE_STATE_COUNT; ++state) {
+        const uint16_t control_word = phase_control_word_from_state((uint8_t)state);
+        assert(control_word < (1u << PHASE_CONTROL_WORD_BITS));
+
         uint16_t command = 0;
         assert(phase_command_from_state((uint8_t)state, 0x0fu, &command));
         assert(command <= PHASE_COMMAND_MAX);
 
-        const bool expected_option = (state & PHASE_OPTION_STATE_BIT) != 0u;
+        const bool expected_option =
+            (control_word & PHASE_CONTROL_WORD_OPTION_MASK) != 0u;
         const bool encoded_option = (command & PHASE_COMMAND_OPTION_MASK) != 0u;
         assert(expected_option == encoded_option);
     }
+
+    assert(phase_control_word_from_state(71u) == 0x147u);
+    assert(phase_control_word_from_state(72u) == 0x147u);
+    assert(phase_control_word_from_state(255u) == 0x1f9u);
 }
 
 static void test_bit_reversal(void)

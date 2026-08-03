@@ -67,11 +67,11 @@ static void test_fault_and_command_history(void)
     record = diagnostic_record_begin_boot(&record, 0xa5u, 7u);
 
     diagnostic_record_set_clock(&record, FIRMWARE_CLOCK_HSI48);
-    diagnostic_record_set_commands(&record, 0x092cu, 0x5cu);
+    diagnostic_record_set_commands(&record, 0x162cu, 0x5cu);
     diagnostic_record_set_fault(&record, FIRMWARE_FAULT_PHASE_SPI_TIMEOUT);
 
     assert(record.clock_source == FIRMWARE_CLOCK_HSI48);
-    assert(record.last_phase_command == 0x092cu);
+    assert(record.last_phase_command == 0x162cu);
     assert(record.last_vga_command == 0x5cu);
     assert(record.current_fault == FIRMWARE_FAULT_PHASE_SPI_TIMEOUT);
     assert(diagnostic_record_is_valid(&record));

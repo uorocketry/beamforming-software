@@ -6,8 +6,20 @@ the RF IC command words.
 
 ## PE44820 phase shifter
 
-`SET_PHASE` and `SET_COMBINED` carry an 8-bit `phase_state` in the range `0..255`. That byte is
-the PE44820 phase setting `D7:D0`; it is not the complete SPI word.
+`SET_PHASE` and `SET_COMBINED` carry an 8-bit `phase_state` in the range `0..255`. The byte is a
+logical phase index, not the PE44820 `D7:D0` field itself.
+
+Firmware indexes the calibrated 2.4 GHz table in
+`stm32/app/include/phase_lookup_2_4_ghz.h`. Each entry is the complete 9-bit PE44820 control
+word:
+
+```text
+bit 8     OPT
+bits 7:0  D7:D0
+```
+
+The table was extracted from the `2.4GHz` worksheet of `PE44820_Lookup_3Feb2025.xlsx`. A
+reviewable export is stored in `docs/PE44820_Lookup_2.4GHz.csv`.
 
 In serial mode the PE44820 consumes a 13-bit program word in this logical order:
 
@@ -15,23 +27,25 @@ In serial mode the PE44820 consumes a 13-bit program word in this logical order:
 D0 D1 D2 D3 D4 D5 D6 D7 OPT A0 A1 A2 A3
 ```
 
-The first nine bits are the phase word and the last four bits are the unit address. Normal-mode
-operation requires `OPT` to follow the 90-degree control bit `D6`. Because the STM32 SPI block
-transmits MSB first, firmware reverses the eight phase bits and four address bits before packing:
+The first nine bits are the looked-up phase word and the last four bits are the unit address.
+Because the STM32 SPI block transmits MSB first, firmware reverses the looked-up eight data bits
+and four address bits before packing. `OPT` comes directly from bit 8 of the calibrated word:
 
 ```text
-command = (reverse8(phase_state) << 5)
-        | (D6 ? 1 : 0) << 4
+phase_word = phase_lookup_2_4_ghz[phase_state]
+
+command = (reverse8(phase_word & 0xff) << 5)
+        | (((phase_word >> 8) & 1) << 4)
         | reverse4(unit_address)
 ```
 
-The datasheet example for approximately 205.3 degrees produces state `146` (`0x92`). At unit
-address `3`, the resulting 13-bit command is `0x092C`. This vector is covered by the native
-firmware tests.
+For approximately 205.3 degrees, the logical index is `146`. The 2.4 GHz lookup maps that index
+to 9-bit word `0x08D` (`010001101`). At unit address `3`, the resulting 13-bit command is
+`0x162C`. This vector is covered by the native firmware tests.
 
-The old `optimizedPhaseState_e` table assigns enum values `0..255`; those values remain valid
-phase-state numbers. Its degree comments are frequency-specific calibration observations and
-are not used as the generic wire definition.
+Some logical indices intentionally map to the same hardware word because the calibration table
+selects the closest measured state. The CAN protocol continues to transmit only the one-byte
+logical index; the frequency-specific hardware mapping remains on the STM32.
 
 ## F0480 DVGA
 
@@ -83,3 +97,4 @@ response. Those properties require board-level logic-analyzer and RF measurement
 
 - `docs/pere_s_a0006625230_1-2279326.pdf` — PE44820 product specification
 - `docs/REN_F0480_DST_20150427_1.pdf` — IDT/Renesas F0480 datasheet
+- `docs/PE44820_Lookup_2.4GHz.csv` — calibrated 2.4 GHz phase lookup used by firmware

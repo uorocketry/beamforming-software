@@ -67,7 +67,7 @@ STATUS_SUBTYPE_PROTOCOL_INFO = 0xF0
 SEQ_CAPABILITIES = 0xFFFF
 
 # Field limits
-PHASE_STATE_MAX = 255
+PHASE_STATE_MAX = 255  # logical index into the receiver's calibrated phase lookup
 PHASE_ADDR_MAX = 3  # BeamControl has 4 channels (0-3)
 ATTEN_DB_MAX = 23  # F0480 supports every 1 dB step from 0 through 23 dB
 

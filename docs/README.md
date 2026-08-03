@@ -41,3 +41,4 @@ Component datasheets used to verify the RF serial encoders are stored alongside 
 
 - [PE44820 digital phase shifter](pere_s_a0006625230_1-2279326.pdf)
 - [IDT/Renesas F0480 RF DVGA](REN_F0480_DST_20150427_1.pdf)
+- [PE44820 calibrated 2.4 GHz lookup](PE44820_Lookup_2.4GHz.csv) — CSV export of the workbook sheet used by firmware

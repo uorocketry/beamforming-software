@@ -1,6 +1,11 @@
 #include "beamforming_protocol.h"
+#include "phase_lookup_2_4_ghz.h"
 
 #include <stddef.h>
+
+_Static_assert(
+    PHASE_LOOKUP_2_4_GHZ_STATE_COUNT == PHASE_STATE_COUNT,
+    "phase lookup must contain every CAN phase state");
 
 uint16_t beamforming_reverse_bits(uint16_t word, uint8_t bit_count)
 {
@@ -14,17 +19,26 @@ uint16_t beamforming_reverse_bits(uint16_t word, uint8_t bit_count)
     return reversed;
 }
 
+uint16_t phase_control_word_from_state(uint8_t phase_state)
+{
+    return phase_control_word_by_state_2_4_ghz[phase_state];
+}
+
 bool phase_command_from_state(uint8_t phase_state, uint8_t unit_address, uint16_t *command)
 {
     if ((command == NULL) || (unit_address > 0x0fu)) {
         return false;
     }
 
-    const uint16_t phase_field = beamforming_reverse_bits(phase_state, PHASE_STATE_BITS);
+    const uint16_t control_word = phase_control_word_from_state(phase_state);
+    const uint16_t phase_bits = control_word & PHASE_CONTROL_WORD_DATA_MASK;
+    const uint16_t phase_field = beamforming_reverse_bits(phase_bits, PHASE_STATE_BITS);
     const uint16_t address_field =
         beamforming_reverse_bits(unit_address, PHASE_UNIT_ADDRESS_BITS);
     const uint16_t option_field =
-        ((phase_state & PHASE_OPTION_STATE_BIT) != 0u) ? PHASE_COMMAND_OPTION_MASK : 0u;
+        ((control_word & PHASE_CONTROL_WORD_OPTION_MASK) != 0u)
+            ? PHASE_COMMAND_OPTION_MASK
+            : 0u;
 
     *command = (uint16_t)(
         (phase_field << PHASE_COMMAND_PHASE_SHIFT)

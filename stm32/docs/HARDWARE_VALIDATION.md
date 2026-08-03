@@ -51,9 +51,9 @@ Capture LE, SCK, data, and serial-programming select.
 - [ ] LE is high while idle and low during the transfer.
 - [ ] SPI mode is CPOL=0, CPHA=0.
 - [ ] Exactly 13 clock edges occur.
-- [ ] The 205.3-degree, address-3 raw command is `0x092c`.
+- [ ] Lookup state 146 maps to 9-bit word `0x08d` and address-3 raw command `0x162c`.
 - [ ] The phase and address fields appear in the device-required logical order.
-- [ ] OPT tracks phase-state bit D6 over representative states on both sides of each transition.
+- [ ] Representative states match `docs/PE44820_Lookup_2.4GHz.csv`, including independent OPT values.
 - [ ] LE setup, hold, and pulse timing meet the current PE44820 datasheet.
 - [ ] Measured RF phase agrees with the requested state over all 256 states or an approved sampling plan.
 - [ ] A forced pre-write timeout leaves LE high.

@@ -45,7 +45,7 @@ static void test_phase_plan(void)
     can_control_plan_t plan = {0};
     assert(can_control_plan_command(&command, &current, &plan) == CAN_COMMAND_RESULT_OK);
     assert(plan.operation_count == 1u);
-    assert_operation(&plan, 0u, CAN_CONTROL_OPERATION_PHASE, 0x092cu);
+    assert_operation(&plan, 0u, CAN_CONTROL_OPERATION_PHASE, 0x162cu);
     assert(plan.resulting_state.phase_state == 146u);
     assert(plan.resulting_state.phase_address == 3u);
     assert(plan.resulting_state.attenuation_db == 23u);
@@ -66,7 +66,7 @@ static void test_phase_plan_temporarily_attenuates_and_restores_active_output(vo
     assert(can_control_plan_command(&command, &current, &plan) == CAN_COMMAND_RESULT_OK);
     assert(plan.operation_count == 3u);
     assert_operation(&plan, 0u, CAN_CONTROL_OPERATION_VGA, 0x5cu);
-    assert_operation(&plan, 1u, CAN_CONTROL_OPERATION_PHASE, 0x092cu);
+    assert_operation(&plan, 1u, CAN_CONTROL_OPERATION_PHASE, 0x162cu);
     assert_operation(&plan, 2u, CAN_CONTROL_OPERATION_VGA, 0x20u);
     assert(plan.resulting_state.phase_state == 146u);
     assert(plan.resulting_state.attenuation_db == 8u);
