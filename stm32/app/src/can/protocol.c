@@ -307,26 +307,23 @@ can_decode_result_t can_protocol_decode_command(
     }
 }
 
-bool can_protocol_make_ack(
+static bool can_protocol_make_result(
+    can_message_type_t response_type,
     uint8_t source_node,
     uint8_t destination_node,
     uint16_t sequence,
     can_message_type_t command_type,
+    can_command_result_t result,
     can_frame_t *frame)
 {
-    if (frame == NULL) {
-        return false;
-    }
-
-    if ((uint32_t)command_type >=
-        (uint32_t)CAN_MESSAGE_TYPE_COUNT) {
+    if (frame == NULL
+        || (uint32_t)command_type >= (uint32_t)CAN_MESSAGE_TYPE_COUNT) {
         return false;
     }
 
     can_protocol_clear_frame(frame);
-
     if (!can_protocol_make_id(
-            CAN_MESSAGE_ACK,
+            response_type,
             destination_node,
             source_node,
             sequence,
@@ -336,9 +333,25 @@ bool can_protocol_make_ack(
 
     frame->length = CAN_ACK_LENGTH;
     frame->data[0] = (uint8_t)command_type;
-    frame->data[1] = (uint8_t)CAN_COMMAND_RESULT_OK;
-
+    frame->data[1] = (uint8_t)result;
     return true;
+}
+
+bool can_protocol_make_ack(
+    uint8_t source_node,
+    uint8_t destination_node,
+    uint16_t sequence,
+    can_message_type_t command_type,
+    can_frame_t *frame)
+{
+    return can_protocol_make_result(
+        CAN_MESSAGE_ACK,
+        source_node,
+        destination_node,
+        sequence,
+        command_type,
+        CAN_COMMAND_RESULT_OK,
+        frame);
 }
 
 bool can_protocol_make_error(
@@ -349,31 +362,14 @@ bool can_protocol_make_error(
     can_command_result_t result,
     can_frame_t *frame)
 {
-    if (frame == NULL) {
-        return false;
-    }
-
-    if ((uint32_t)command_type >=
-        (uint32_t)CAN_MESSAGE_TYPE_COUNT) {
-        return false;
-    }
-
-    can_protocol_clear_frame(frame);
-
-    if (!can_protocol_make_id(
-            CAN_MESSAGE_ERROR,
-            destination_node,
-            source_node,
-            sequence,
-            &frame->id)) {
-        return false;
-    }
-
-    frame->length = CAN_ERROR_LENGTH;
-    frame->data[0] = (uint8_t)command_type;
-    frame->data[1] = (uint8_t)result;
-
-    return true;
+    return can_protocol_make_result(
+        CAN_MESSAGE_ERROR,
+        source_node,
+        destination_node,
+        sequence,
+        command_type,
+        result,
+        frame);
 }
 
 bool can_protocol_make_status(

@@ -91,7 +91,7 @@ def smoke_test(bundle: Path) -> None:
                     "from beamcontrol.monitor import BeamControlMonitor; "
                     "from beamcontrol.web.server import STATIC_DIR, TEMPLATE_DIR, create_app; "
                     "assert (STATIC_DIR / 'styles.css').is_file(); "
-                    "assert (STATIC_DIR / 'vendor/htmx-2.0.10.min.js').is_file(); "
+                    "assert (STATIC_DIR / 'dashboard.js').is_file(); "
                     "assert (TEMPLATE_DIR / 'index.html').is_file(); "
                     "assert create_app(BeamControlMonitor(BeamControlConfig())).title "
                     "== 'BeamControl'"

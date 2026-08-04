@@ -16,6 +16,7 @@ from __future__ import annotations
 import threading
 import time
 from collections.abc import Callable, Sequence
+from dataclasses import dataclass
 from typing import Any
 
 import can
@@ -35,49 +36,20 @@ class BeamControlProtocolError(BeamControlError):
     """A response from the addressed node violated the wire protocol."""
 
 
+@dataclass(frozen=True, slots=True)
 class NodeStatus:
-    __slots__ = (
-        "major",
-        "minor",
-        "patch",
-        "node_id",
-        "health_flags",
-        "rx_dropped",
-        "tx_dropped",
-        "invalid_commands",
-    )
-
-    def __init__(
-        self,
-        major: int,
-        minor: int,
-        patch: int,
-        node_id: int,
-        health_flags: int,
-        rx_dropped: int,
-        tx_dropped: int,
-        invalid_commands: int,
-    ) -> None:
-        self.major = major
-        self.minor = minor
-        self.patch = patch
-        self.node_id = node_id
-        self.health_flags = health_flags
-        self.rx_dropped = rx_dropped
-        self.tx_dropped = tx_dropped
-        self.invalid_commands = invalid_commands
+    major: int
+    minor: int
+    patch: int
+    node_id: int
+    health_flags: int
+    rx_dropped: int
+    tx_dropped: int
+    invalid_commands: int
 
     @property
     def version(self) -> tuple[int, int, int]:
         return self.major, self.minor, self.patch
-
-    def __repr__(self) -> str:
-        return (
-            f"NodeStatus(version={self.major}.{self.minor}.{self.patch}, "
-            f"node={self.node_id}, health=0x{self.health_flags:02x}, "
-            f"rx_dropped={self.rx_dropped}, tx_dropped={self.tx_dropped}, "
-            f"invalid={self.invalid_commands})"
-        )
 
 
 class BeamControlClient:

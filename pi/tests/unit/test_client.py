@@ -122,16 +122,19 @@ def test_sequence_ffff_is_normal():
     assert P.parse_id(transport.sent[0].arbitration_id)["sequence"] == 0xFFFF
 
 
-def test_bulk_payload_validation():
+@pytest.mark.parametrize(
+    ("method", "args"),
+    [
+        ("set_phase", ([1, 2, 3],)),
+        ("set_phase", ([1, 2, 3, 256],)),
+        ("set_vga", ([0, 8, 24, 23],)),
+        ("set_combined", (PHASES, [0, 1, 2])),
+    ],
+)
+def test_bulk_payload_validation(method, args):
     client, _, _ = _make([None], retries=0)
     with pytest.raises(ValueError):
-        client.set_phase(3, [1, 2, 3])
-    with pytest.raises(ValueError):
-        client.set_phase(3, [1, 2, 3, 256])
-    with pytest.raises(ValueError):
-        client.set_vga(3, [0, 8, 24, 23])
-    with pytest.raises(ValueError):
-        client.set_combined(3, PHASES, [0, 1, 2])
+        getattr(client, method)(3, *args)
 
 
 @pytest.mark.parametrize(
@@ -149,16 +152,19 @@ def test_individual_methods_send_exact_payload(method, args, command_type, paylo
     assert bytes(transport.sent[0].data) == payload
 
 
-def test_individual_method_validation():
+@pytest.mark.parametrize(
+    ("method", "args"),
+    [
+        ("set_phase_channel", (4, 128)),
+        ("set_phase_channel", (2, 256)),
+        ("set_vga_channel", (2, 24)),
+        ("set_combined_channel", (2, 64, 24)),
+    ],
+)
+def test_individual_method_validation(method, args):
     client, _, _ = _make([], retries=0)
     with pytest.raises(ValueError):
-        client.set_phase_channel(3, 4, 128)
-    with pytest.raises(ValueError):
-        client.set_phase_channel(3, 2, 256)
-    with pytest.raises(ValueError):
-        client.set_vga_channel(3, 2, 24)
-    with pytest.raises(ValueError):
-        client.set_combined_channel(3, 2, 64, 24)
+        getattr(client, method)(3, *args)
 
 
 def test_discovery_returns_current_status():
@@ -240,15 +246,15 @@ def test_discovery_mismatched_node_id_ignored():
 # --- production-API safeguards --------------------------------------------------
 
 
-def test_unicast_destination_enforced():
+@pytest.mark.parametrize("bad", [0, 31, 32, -1])
+@pytest.mark.parametrize(
+    ("method", "args"),
+    [("enter_safe", (0,)), ("set_phase", (PHASES,)), ("discover", ())],
+)
+def test_unicast_destination_enforced(bad, method, args):
     client, _, _ = _make([None], retries=0)
-    for bad in (0, 31, 32, -1):
-        with pytest.raises(ValueError):
-            client.enter_safe(bad, 0)
-        with pytest.raises(ValueError):
-            client.set_phase(bad, PHASES)
-        with pytest.raises(ValueError):
-            client.discover(bad)
+    with pytest.raises(ValueError):
+        getattr(client, method)(bad, *args)
 
 
 def test_broadcast_enter_safe_sends_and_does_not_wait():
@@ -267,14 +273,11 @@ def test_broadcast_enter_safe_validates_channel():
         client.broadcast_enter_safe(4)
 
 
-def test_constructor_validation():
-    t = FakeTransport([], clock=lambda: 0.0, advance=lambda s: None)
+@pytest.mark.parametrize("kwargs", [{"source_node": 5}, {"timeout": 0}, {"retries": -1}])
+def test_constructor_validation(kwargs):
+    transport = FakeTransport([], clock=lambda: 0.0, advance=lambda _: None)
     with pytest.raises(ValueError):
-        BeamControlClient(t, source_node=5)
-    with pytest.raises(ValueError):
-        BeamControlClient(t, timeout=0)
-    with pytest.raises(ValueError):
-        BeamControlClient(t, retries=-1)
+        BeamControlClient(transport, **kwargs)
 
 
 def test_sequence_reuse_recovers_with_fresh_sequence():

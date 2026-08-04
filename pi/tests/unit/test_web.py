@@ -97,7 +97,7 @@ def test_dashboard_routes_and_lifespan() -> None:
             assert response.status_code == 200
             assert "BeamControl" in response.text
             assert "Receiver boards" in response.text
-            assert 'hx-get="/fragments/dashboard"' in response.text
+            assert 'data-refresh-url="/fragments/dashboard"' in response.text
 
             fragment = await client.get("/fragments/dashboard")
             assert fragment.status_code == 200
@@ -106,9 +106,9 @@ def test_dashboard_routes_and_lifespan() -> None:
             stylesheet = await client.get("/static/styles.css")
             assert stylesheet.status_code == 200
             assert "--green" in stylesheet.text
-            htmx = await client.get("/static/vendor/htmx-2.0.10.min.js")
-            assert htmx.status_code == 200
-            assert htmx.text.startswith("var htmx=")
+            script = await client.get("/static/dashboard.js")
+            assert script.status_code == 200
+            assert "data-refresh-url" in script.text
 
             status = await client.get("/api/status")
             assert status.status_code == 200

@@ -12,8 +12,6 @@ Python 3.11 controller for Raspberry Pi 5, CAN node `0`. Receiver boards use nod
 - `beamd`: monitor and read-only dashboard
 - TOML configuration
 
-`can_setup.py` configures `can0` at 500 kbit/s, 87.5% sample point.
-
 ## Develop
 
 ```bash
@@ -38,7 +36,7 @@ beamctl enter-safe 1 --channel 2
 
 ## Dashboard
 
-`beamd` serves FastAPI/Jinja2/HTMX status on port `8080`. It shows service, CAN, node health, protocol, response time, and recent events. `/readyz` returns `503` when CAN or required nodes are unhealthy.
+`beamd` serves FastAPI/Jinja2 status on port `8080`. It shows service, CAN, node health, protocol, response time, and recent events. `/readyz` returns `503` when CAN or required nodes are unhealthy.
 
 The dashboard is read-only and unauthenticated. Bind `web_host = "127.0.0.1"` and use SSH tunneling outside a trusted network.
 

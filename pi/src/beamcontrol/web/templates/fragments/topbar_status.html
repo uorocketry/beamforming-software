@@ -1,6 +1,5 @@
 <div id="topbar-status" class="status-cluster"
-     hx-get="/fragments/topbar" hx-trigger="every 2s" hx-swap="outerHTML"
-     aria-label="BeamControl service status">
+     data-refresh-url="/fragments/topbar" aria-label="BeamControl service status">
   <span class="service-status online"><i></i><b>Web</b><em>online</em></span>
   <span class="service-status {{ can.health }}"><i></i><b>{{ can.channel }}</b><em>{{ can.health }}</em></span>
   <span class="service-status {{ service.health }}"><i></i><b>Boards</b><em>{{ node_summary.online }}/{{ node_summary.monitored }}</em></span>

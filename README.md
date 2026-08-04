@@ -46,22 +46,12 @@ Node IDs are `1..30` and must be unique. Outputs are under `stm32/app/build/`.
 ```bash
 beamctl discover
 beamctl ping 1
-
-# Individual
 beamctl set-phase 1 --state 128 --channel 2
-beamctl set-vga 1 --attenuation 8 --channel 2
-beamctl set-combined 1 --state 128 --attenuation 8 --channel 2
-
-# Bulk, channel order 0..3
 beamctl set-phase 1 --states 128 64 32 16
-beamctl set-vga 1 --attenuations 8 9 10 11
-beamctl set-combined 1 --states 64 65 66 67 --attenuations 12 13 14 15
-
-beamctl enter-safe 1 --channel 2
 beamd --config /etc/uorocketry/beamcontrol.toml
 ```
 
-`beamd` serves a read-only dashboard on port `8080` and stays available when CAN is offline.
+`beamctl` supports individual and four-channel phase, VGA, combined, and safe commands. See the [Pi controller](pi/README.md) for the complete CLI. `beamd` serves a read-only dashboard on port `8080` and remains available when CAN is offline.
 
 ## Docs
 

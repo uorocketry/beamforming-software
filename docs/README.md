@@ -1,9 +1,8 @@
 # Documentation
 
-- [Overview](overview.md): system roles and test layers
+- [Overview](overview.md): command path and test layers
 - [CAN protocol v2.1](can-protocol.md): wire contract
 - [RF encoding](rf-control.md): PE44820/F0480 commands and ACK limits
-- [Firmware](firmware.md): target and build
 - [Hardware validation](hardware-validation.md): release and PCB checks
 - [Developer setup](operations/developer-setup.md)
 - [Pi deployment](operations/pi-provisioning.md)
