@@ -7,27 +7,28 @@ OPENCM3_DEFS := -DSTM32F0
 
 CFILES := \
 	src/main.c \
-	src/beamforming_protocol.c \
-	src/build_info.c \
-	src/can_bus.c \
-	src/can_tx_queue.c \
-	src/can_control.c \
-	src/can_filter.c \
-	src/can_protocol.c \
-	src/can_queue.c \
-	src/can_runtime.c \
-	src/clock_control.c \
-	src/diagnostic_record.c \
-	src/diagnostics.c \
-	src/faults.c \
-	src/phaseShifter.c \
-	src/spi_guard.c \
-	src/timebase.c \
-	src/vga.c \
-	src/watchdog.c
+	src/can/bus.c \
+	src/can/filter.c \
+	src/can/protocol.c \
+	src/can/runtime.c \
+	src/can/rx_queue.c \
+	src/can/tx_queue.c \
+	src/rf/commands.c \
+	src/rf/execute.c \
+	src/rf/phase_shifter.c \
+	src/rf/plan.c \
+	src/rf/vga.c \
+	src/platform/build_info.c \
+	src/platform/clock.c \
+	src/platform/diagnostic_record.c \
+	src/platform/diagnostics.c \
+	src/platform/faults.c \
+	src/platform/spi_guard.c \
+	src/platform/timebase.c \
+	src/platform/watchdog.c
 
 INCLUDES += -Iinclude
-CSTD := -std=c17
+CSTD := -std=c2x
 OPT ?= -Os
 
 GIT_REVISION ?= $(shell git rev-parse --verify HEAD 2>/dev/null || printf unknown)

@@ -17,7 +17,7 @@ from typing import Protocol
 import can
 
 from . import protocol as P
-from .client import BeamControlClient, BeamControlError, BeamControlProtocolError, ProtocolInfo
+from .client import BeamControlClient, BeamControlError, BeamControlProtocolError, NodeStatus
 from .config import BeamControlConfig
 from .transport import SocketCanTransport
 
@@ -25,7 +25,7 @@ log = logging.getLogger(__name__)
 
 
 class ClientLike(Protocol):
-    def discover(self, destination: int) -> tuple[bytes, ProtocolInfo | None]: ...
+    def discover(self, destination: int) -> NodeStatus: ...
 
 
 ClientFactory = Callable[[BeamControlConfig], tuple[ClientLike, Callable[[], None]]]
@@ -38,7 +38,6 @@ class NodeRecord:
     node_id: int
     health: str = "offline"
     protocol_version: str | None = None
-    feature_flags: int | None = None
     response_ms: float | None = None
     last_seen: datetime | None = None
     error: str | None = None
@@ -51,19 +50,13 @@ class EventRecord:
     message: str
 
 
-def configured_node_failure(node: int, info: ProtocolInfo | None) -> str | None:
+def configured_node_failure(node: int, status: NodeStatus) -> str | None:
     """Return why a receiver node fails the production protocol gate."""
-    if info is None:
-        return f"receiver node {node} does not support protocol v1.1"
-    if info.major != 1 or info.minor < 1:
+    if status.version != P.PROTOCOL_VERSION:
         return (
             f"receiver node {node} has incompatible protocol version "
-            f"{info.major}.{info.minor}.{info.patch}"
+            f"{status.major}.{status.minor}.{status.patch}"
         )
-    required = P.FEATURE_FLAGS
-    if info.feature_flags & required != required:
-        missing = required & ~info.feature_flags
-        return f"receiver node {node} is missing required features 0x{missing:04x}"
     return None
 
 
@@ -226,7 +219,7 @@ class BeamControlMonitor:
                 break
             request_started = self._clock()
             try:
-                _, info = self._client.discover(node)
+                status = self._client.discover(node)
             except BeamControlProtocolError as error:
                 self._mark_node_failure(node, f"protocol error: {error}")
             except BeamControlError as error:
@@ -245,23 +238,20 @@ class BeamControlMonitor:
                 log.exception("unexpected receiver polling failure")
             else:
                 response_ms = (self._clock() - request_started) * 1000.0
-                self._mark_node_success(node, info, response_ms)
+                self._mark_node_success(node, status, response_ms)
 
         self._finish_cycle(cycle_started)
 
-    def _mark_node_success(self, node: int, info: ProtocolInfo | None, response_ms: float) -> None:
-        failure = configured_node_failure(node, info)
+    def _mark_node_success(self, node: int, status: NodeStatus, response_ms: float) -> None:
+        failure = configured_node_failure(node, status)
         health = "healthy" if failure is None else "degraded"
-        protocol_version = (
-            "1.0 legacy" if info is None else f"{info.major}.{info.minor}.{info.patch}"
-        )
+        protocol_version = f"{status.major}.{status.minor}.{status.patch}"
         now = self._wall_clock()
         with self._lock:
             record = self._nodes.setdefault(node, NodeRecord(node))
             previous_health = record.health
             record.health = health
             record.protocol_version = protocol_version
-            record.feature_flags = None if info is None else info.feature_flags
             record.response_ms = response_ms
             record.last_seen = now
             record.error = failure
@@ -303,9 +293,6 @@ class BeamControlMonitor:
                     "node_id": record.node_id,
                     "health": record.health,
                     "protocol_version": record.protocol_version or "—",
-                    "feature_flags": (
-                        "—" if record.feature_flags is None else f"0x{record.feature_flags:04x}"
-                    ),
                     "response_ms": (
                         None if record.response_ms is None else round(record.response_ms, 1)
                     ),

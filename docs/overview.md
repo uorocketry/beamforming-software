@@ -1,193 +1,70 @@
 # BeamControl overview
 
-## 30-second explanation
+BeamControl splits Pi supervision from deterministic STM32 RF control.
 
-BeamControl lets a Raspberry Pi control one or more four-channel RF receiver boards over CAN.
-The Pi is the controller and hosts the command-line tools, status monitor, and web dashboard.
-Each receiver board has one STM32 microcontroller that receives CAN commands and programs the
-board's phase shifters and attenuation hardware over SPI.
+## Pi
 
-```text
-Operator or browser
-        |
-Raspberry Pi 5                  CAN node 0
-        |
-       CAN
-        |
-STM32 receiver board            CAN node 1..30
-  |- RF channel 0
-  |- RF channel 1
-  |- RF channel 2
-  `- RF channel 3
+- Sends individual or four-channel commands.
+- Discovers and monitors receivers.
+- Serves the read-only dashboard.
+- Uses Linux SocketCAN.
+
+## STM32
+
+- Validates CAN frames.
+- Converts phase indexes and attenuation values to RF serial words.
+- Attenuates before phase changes.
+- Returns ACK, ERROR, and STATUS.
+- Uses replay protection, watchdog recovery, and retained diagnostics.
+
+A board is one CAN node; RF devices are local peripherals.
+
+## Command path
+
+```mermaid
+sequenceDiagram
+    participant Operator as beamctl
+    participant Pi as Pi client
+    participant STM32 as STM32 receiver
+    participant RF as RF devices
+
+    Operator->>Pi: Individual or bulk command
+    Pi->>STM32: CAN request
+    STM32->>STM32: Decode, validate, plan
+    STM32->>RF: SPI/GPIO writes
+    STM32-->>Pi: ACK or ERROR
+    Pi-->>Operator: Result
 ```
 
-A complete receiver board is one CAN node. The four RF paths are channels inside that node;
-they are not separate CAN nodes.
+ACK confirms STM32 transfer completion, not RF-device readback.
 
-## What each part does
+## Compared with the original prototype
 
-### Raspberry Pi controller
-
-The Pi runs the Python software:
-
-- `beamd` monitors receiver boards and serves the read-only web dashboard;
-- `beamctl` sends operator commands and diagnostics; and
-- SocketCAN provides the connection to the physical CAN HAT.
-
-The Pi uses CAN node address `0`.
-
-### STM32 receiver board
-
-Each receiver board runs the STM32F072 firmware and has a unique CAN node address from `1` to
-`30`. The firmware:
-
-- validates incoming commands;
-- controls phase and attenuation through SPI and GPIO;
-- attenuates before changing phase to reduce unsafe output transitions;
-- returns ACK, ERROR, and STATUS messages;
-- handles retries without repeating an already completed operation; and
-- uses watchdog recovery and retained fault diagnostics.
-
-### RF channels and components
-
-Each board contains four RF channels, numbered `0` through `3`. A command therefore identifies:
-
-1. the receiver-board CAN node; and
-2. the channel inside that board when the operation is channel-specific.
-
-Phase shifters, amplifiers, filters, detectors, and antenna elements are components of a board,
-not CAN nodes.
-
-## Example command path
-
-```text
-beamctl set-phase 1 --channel 2 --state 128
-        |
-        | CAN command to receiver node 1
-        v
-STM32 validates the request
-        |
-        | SPI and GPIO transaction
-        v
-Phase shifter for channel 2 is programmed
-        |
-        | CAN ACK
-        v
-Pi confirms that the command completed
-```
-
-## What was added beyond the original STM32 prototype
-
-The original `stm32beamforming` code was a hardware bring-up program. It configured SPI,
-wrote one hard-coded phase-shifter command, and then stopped. The VGA driver was present, but
-the active program did not initialize or use it.
-
-BeamControl keeps the same basic SPI device-control idea and expands it into production-style
-receiver firmware:
-
-| Area | Original STM32 prototype | BeamControl |
+| Area | Prototype | BeamControl |
 |:--|:--|:--|
-| Main behavior | Sends one phase command and stops | Runs continuously as a CAN-controlled receiver node |
-| Remote control | None | CAN commands for discovery, phase, attenuation, combined updates, and safe mode |
-| Addressing | Hard-coded local device address | Receiver-board node `1..30` plus RF channel `0..3` |
-| VGA use | Driver existed but was unused by `main` | Initialized at boot and controlled through CAN |
-| SPI completion | Wrote data and raised latch/CS immediately | Waits for TX-ready and transfer completion with bounded timeouts |
-| Safe phase changes | None | Applies maximum attenuation before changing phase, then restores attenuation |
-| Validation | Minimal | Checks CAN IDs, frame type, lengths, ranges, reserved bytes, and broadcast rules |
-| Retries | None | Sequence numbers and replay handling avoid repeating completed RF operations |
-| Fault handling | Debug breakpoint or infinite loop | Records faults, resets, and can enter safe lockout after repeated incomplete boots |
-| Watchdog | None | Independent watchdog supervises the running firmware |
-| Diagnostics | None | Boot count, reset flags, fault history, clock source, and last RF commands are retained |
-| CAN robustness | No CAN | Acceptance filters, RX/TX queues, priorities, retransmission, and bus-off recovery |
-| Testing | Manual hardware experiments | Native C tests, Python/C protocol tests, cross-builds, and Docker/Renode E2E simulation |
+| Runtime | One hard-coded write | Continuous CAN node |
+| Commands | None | Discovery, individual/bulk RF updates, safe mode |
+| VGA | Driver unused by `main` | Initialized and controlled |
+| Phase safety | None | Attenuate, phase, restore/apply |
+| SPI | No bounded completion wait | Guarded transfer and timeout |
+| Validation | Minimal | ID, type, DLC, ranges, broadcast, replay |
+| Recovery | Debug/infinite loop | Fault record, reset, safe lockout, watchdog |
+| CAN | None | Filters, queues, priorities, bus-off recovery |
+| Tests | Manual | Python, native C, contract, ARM build, Renode E2E |
 
-The project also corrected issues present in the old codebase, including a phase-conversion
-integer-division error, inconsistent function types that prevented modern compilation, and
-raising SPI latch signals without explicitly waiting for the transfer to finish.
+## Dashboard
 
-In simple terms, the original code proved that the STM32 could talk to the RF control chips.
-BeamControl turns that proof of concept into a remotely operated, continuously supervised,
-testable receiver-board controller.
+`beamd` shows Pi/service, CAN, receiver health, protocol, latency, and recent events. It is read-only and remains available during CAN failures.
 
-The current firmware is still not a substitute for hardware qualification. It cannot confirm
-that an external RF device physically accepted an SPI command because there is no device
-readback, and real CAN electrical behavior and RF performance must still be measured on the
-board.
+## Test layers
 
-## Web dashboard
-
-`beamd` serves a compact FastAPI/Jinja2/HTMX dashboard. It shows:
-
-- Pi and service status;
-- CAN availability;
-- receiver-board health;
-- protocol versions and response times; and
-- recent monitor events.
-
-The current dashboard is read-only. It remains available when CAN hardware or receiver boards
-are offline so it can explain the failure state.
-
-## Virtual end-to-end simulation
-
-The repository can run the controller and the actual compiled STM32 firmware without physical
-boards:
-
-```text
-Docker Compose
-  |- real beamd and dashboard
-  |- container-local SocketCAN vcan0
-  |- Renode running the real STM32 ELF
-  `- automated end-to-end assertions
-```
-
-Run it with:
-
-```bash
-make simulation-test
-```
-
-The test verifies that real CAN commands reach the real firmware, produce the expected ACKs,
-and become the expected SPI and GPIO writes. It covers discovery, phase, attenuation, combined
-safe transitions, safe mode, and dashboard health.
-
-## What the simulation proves
-
-It verifies the software path end to end:
-
-```text
-Python controller -> SocketCAN -> STM32 firmware -> SPI/GPIO behavior -> CAN response
-```
-
-It does not verify electrical or RF behavior such as voltage levels, RF phase accuracy, signal
-integrity, CAN termination, oscillator tolerance, brownouts, or physical component failures.
-Those require hardware-in-the-loop and RF acceptance testing.
-
-## Testing layers
-
-| Layer | Purpose |
+| Layer | Coverage |
 |:--|:--|
-| Unit and protocol tests | Check Python and C logic quickly |
-| Docker + Renode simulation | Exercise the real controller and STM32 firmware together |
-| ARM64 deployment test | Verify the offline Raspberry Pi bundle |
-| Physical hardware test | Validate CAN electrical behavior, GPIO/SPI timing, and RF performance |
-
-## Simple demonstration
+| Unit/contract | Python and C logic |
+| Renode E2E | Pi client, SocketCAN, real STM32 ELF, SPI/GPIO |
+| ARM64 bundle test | Offline Pi installation |
+| Hardware validation | Electrical timing, CAN wiring, RF performance |
 
 ```bash
 make simulation-test
 ```
-
-A successful run demonstrates that:
-
-1. the virtual CAN bus starts;
-2. the real STM32 firmware boots in Renode;
-3. the real Pi controller discovers receiver node `1`;
-4. phase, attenuation, combined, and safe commands are acknowledged;
-5. the expected SPI/GPIO transactions occur; and
-6. the dashboard reports the receiver as healthy.
-
-The main message is:
-
-> BeamControl separates high-level supervision on the Raspberry Pi from deterministic,
-> safety-aware RF control on each STM32 receiver board, and the complete software path is
-> tested automatically before physical hardware testing.

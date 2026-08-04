@@ -1,4 +1,4 @@
-"""Host-runnable regression tests for the BeamControl v1.1 protocol module.
+"""Host-runnable regression tests for the BeamControl v2.1 protocol module.
 
 Run:  pytest pi/tests/unit/test_protocol.py -v
 """
@@ -49,24 +49,42 @@ class TestIdEncodeDecode(unittest.TestCase):
 
 class TestValidation(unittest.TestCase):
     def test_strict_channels_0_3(self):
-        for ch in (0, 1, 2, 3):
-            P.validate_payload(ch)
-        for ch in (4, 5, 15, 255):
+        for channel in (0, 1, 2, 3):
+            P.validate_channel(channel)
+        for channel in (4, 5, 15, 255):
             with self.assertRaises(ValueError):
-                P.validate_payload(ch)
+                P.validate_channel(channel)
 
-    def test_attenuation_0_23(self):
-        for a in (0, 23):
-            P.validate_payload(0, atten_db=a)
-        for a in (24, 255):
-            with self.assertRaises(ValueError):
-                P.validate_payload(0, atten_db=a)
-
-    def test_phase_state_0_255(self):
-        for p in (0, 255):
-            P.validate_payload(0, phase_state=p)
+    def test_bulk_attenuation_uses_every_1_db_step(self):
+        for attenuation in range(P.ATTEN_DB_MAX + 1):
+            self.assertEqual(
+                P.validate_attenuations([attenuation] * P.RF_CHANNEL_COUNT),
+                bytes([attenuation] * P.RF_CHANNEL_COUNT),
+            )
         with self.assertRaises(ValueError):
-            P.validate_payload(0, phase_state=256)
+            P.validate_attenuations([0, 1, 2, 24])
+        with self.assertRaises(ValueError):
+            P.validate_attenuations([0, 1, 2])
+
+    def test_bulk_phase_states_0_255(self):
+        self.assertEqual(
+            P.validate_phase_states([0, 1, 254, 255]),
+            bytes([0, 1, 254, 255]),
+        )
+        with self.assertRaises(ValueError):
+            P.validate_phase_states([0, 1, 2, 256])
+        with self.assertRaises(ValueError):
+            P.validate_phase_states([0, 1, 2])
+
+    def test_individual_values(self):
+        self.assertEqual(P.validate_phase_state(255), 255)
+        self.assertEqual(P.validate_attenuation(23), 23)
+        for invalid in (-1, 256, True):
+            with self.assertRaises(ValueError):
+                P.validate_phase_state(invalid)
+        for invalid in (-1, 24, True):
+            with self.assertRaises(ValueError):
+                P.validate_attenuation(invalid)
 
 
 class TestConstants(unittest.TestCase):
@@ -84,8 +102,9 @@ class TestConstants(unittest.TestCase):
         self.assertEqual(P.CONTROLLER_NODE, 0)
         self.assertEqual(P.BROADCAST_NODE, 31)
 
-    def test_discovery_sequence_reserved(self):
-        self.assertEqual(P.SEQ_CAPABILITIES, 0xFFFF)
+    def test_protocol_version(self):
+        self.assertEqual(P.PROTOCOL_VERSION, (2, 1, 0))
+        self.assertEqual(P.RF_CHANNEL_COUNT, 4)
 
 
 if __name__ == "__main__":

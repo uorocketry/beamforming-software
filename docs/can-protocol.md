@@ -1,141 +1,131 @@
-# BeamControl CAN protocol v1.1
+# BeamControl CAN protocol v2.1
 
-This is the implemented wire contract shared by the Raspberry Pi software, STM32 firmware,
-and generated protocol-vector tests.
+Implemented by the Pi client, STM32 firmware, and shared vectors.
 
-## Bus profile
+## Bus
 
 | Property | Value |
 |:--|:--|
-| Format | Classical CAN 2.0B extended data frames |
-| Identifier | 29-bit |
-| Bitrate | 500,000 bit/s |
-| Sample point | 87.5% |
-| SJW | 1 TQ |
-| Controller node | Raspberry Pi, address `0` |
-| Receiver nodes | One STM32 board each, addresses `1..30` |
-| Broadcast destination | `31` |
-| Maximum payload | 8 bytes |
-| Protocol version | 1.1 |
+| Frame | Classical CAN 2.0B extended data |
+| Bitrate | 500 kbit/s |
+| Sample point / SJW | 87.5% / 1 TQ |
+| Controller | Node `0` |
+| Receivers | Nodes `1..30` |
+| Broadcast | `31` |
+| Payload | 0..8 bytes |
 
-## Terminology
-
-- A **receiver node** is one complete BeamControl board with one STM32.
-- An **RF channel** is one of the four signal paths inside a receiver node (`0..3`).
-- Phase shifters, DVGAs, antenna elements, and other peripherals are not CAN nodes.
-
-## Identifier layout
+## Identifier
 
 ```text
-Bits 28:26  TYPE        3 bits
-Bits 25:21  DEST        5 bits
-Bits 20:16  SOURCE      5 bits
-Bits 15:0   SEQUENCE    16 bits
+28:26 TYPE
+25:21 DEST
+20:16 SOURCE
+15:0  SEQUENCE
 ```
 
 ```text
-identifier = (type << 26) | (destination << 21) | (source << 16) | sequence
+id = (type << 26) | (dest << 21) | (source << 16) | sequence
 ```
 
-Responses swap source and destination and retain the request sequence. `ENTER_SAFE` has the
-lowest numeric message type and therefore the highest arbitration priority used by this
-protocol.
+Responses swap source/destination and preserve sequence. `ENTER_SAFE` has the highest command priority because its type is `0`.
 
-## Message types
+## Channels
 
-| Type | Message | Direction | Payload |
+Software channels are `0..3`. Bulk array indexes map to PE44820 addresses `1..4`.
+
+## Messages
+
+| Type | Name | Direction | Exact payload |
 |:--|:--|:--|:--|
-| `0` | `ENTER_SAFE` | Controller → receiver | `[channel]` |
-| `1` | `SET_COMBINED` | Controller → receiver | `[phase_state, channel, attenuation_db]` |
-| `2` | `SET_PHASE` | Controller → receiver | `[phase_state, channel]` |
-| `3` | `SET_VGA` | Controller → receiver | `[attenuation_db]` |
-| `4` | `PING` | Controller → receiver | empty |
-| `5` | `STATUS` | Receiver → controller | 8-byte status |
-| `6` | `ACK` | Receiver → controller | `[command_type, result]` |
-| `7` | `ERROR` | Receiver → controller | `[command_type, result]` |
+| `0` | `ENTER_SAFE` | Controller -> receiver | `[channel]` |
+| `1` | `SET_COMBINED` | Controller -> receiver | `[state, channel, atten]` or `[PS1..PS4, VGA1..VGA4]` |
+| `2` | `SET_PHASE` | Controller -> receiver | `[state, channel]` or `[PS1, PS2, PS3, PS4]` |
+| `3` | `SET_VGA` | Controller -> receiver | `[atten, channel]` or `[VGA1, VGA2, VGA3, VGA4]` |
+| `4` | `PING` | Controller -> receiver | empty |
+| `5` | `STATUS` | Receiver -> controller | 8 bytes |
+| `6` | `ACK` | Receiver -> controller | `[command_type, result]` |
+| `7` | `ERROR` | Receiver -> controller | `[command_type, result]` |
 
-Valid application values are:
+Ranges:
 
 - `channel`: `0..3`
-- `phase_state`: `0..255`
-- `attenuation_db`: `0..23`
+- phase state: `0..255`, index into the calibrated 2.4 GHz enum
+- attenuation: `0..23` dB
 
-Unused payload bytes must be zero. A command may use its minimum DLC or a longer zero-padded
-DLC, but an exact retry must preserve the original identifier, DLC, and payload bytes.
+RF commands require exact DLCs:
 
-## Responses and retries
+| Command | Individual | Bulk |
+|:--|--:|--:|
+| `SET_PHASE` | 2 | 4 |
+| `SET_VGA` | 2 | 4 |
+| `SET_COMBINED` | 3 | 8 |
 
-A unicast state-changing command produces one terminal response:
+Every command uses an exact DLC. `ENTER_SAFE` is 1 byte and `PING` is empty.
 
-- `ACK` when the command completes successfully;
-- `ERROR` when validation or execution rejects the command.
+## Execution order
 
-The controller matches responses by source, destination, sequence, and command type. It keeps
-at most one outstanding transaction per receiver node. The default host policy uses a 20 ms
-timeout and two exact-message retries. A final timeout means the resulting hardware state is
-unknown.
+```mermaid
+flowchart LR
+    vga[SET_VGA] --> vgaWrite["Write attenuation(s)"]
+    phase[SET_PHASE] --> phaseSafe["23 dB"] --> phaseWrite["Write phase(s)"] --> restore["Restore attenuation(s)"]
+    combined[SET_COMBINED] --> combinedSafe["23 dB"] --> combinedPhase["Write phase(s)"] --> apply["Apply attenuation(s)"]
+    safe[ENTER_SAFE] --> safeAtten["23 dB"] --> safePhase["Phase state 0"]
+```
 
-Duplicate requests are handled by a replay cache keyed by source, type, and sequence:
+The planner validates the complete frame before hardware writes. Broadcast is allowed only for `ENTER_SAFE`.
 
-- identical request: replay the cached response;
-- same key with different DLC or payload: return sequence-reuse error.
+## ACK, retries, replay
 
-Broadcast address `31` accepts only idempotent `ENTER_SAFE`. Broadcast requests never produce
-ACK or ERROR frames.
+A unicast state-changing request returns:
 
-## Safe output transitions
+- `ACK` after validation and planned STM32 SPI transfers complete
+- `ERROR` on decode, validation, sequence, or execution failure
 
-`SET_PHASE` and `SET_COMBINED` apply outputs in this order:
+ACK is not RF-device readback; neither RF interface has MISO connected.
 
-1. Apply 23 dB attenuation.
-2. Program the phase shifter.
-3. Apply the final requested attenuation.
+The client matches source, destination, sequence, and command type. Default timeout: 20 ms. Default retries: two, using identical ID, DLC, and bytes. A final timeout means hardware state is unknown.
 
-An ACK is sent only after all steps complete. Recoverable failures leave attenuation at 23 dB.
-Fatal SPI failures reset the firmware, so the controller observes a missing response.
+The receiver caches the latest successful unicast state-changing request:
 
-## Capability discovery
+- identical retry: replay ACK, no RF writes
+- same source/type/sequence with different DLC or data: `SEQUENCE_REUSE`
+- broadcast: no cache, no response
 
-Sequence `0xFFFF` is reserved for discovery. A receiver answers `PING` at that sequence with
-its normal status and a `PROTOCOL_INFO` status frame:
+## Results
 
-| Byte | Value |
-|:--|:--|
-| 0 | `0xF0` subtype |
-| 1 | Major version |
-| 2 | Minor version |
-| 3 | Patch version |
-| 4–5 | Feature flags, little-endian |
-| 6 | Compiled receiver node ID |
-| 7 | Reserved, zero |
+| Value | Name | Meaning |
+|:--|:--|:--|
+| `0` | `OK` | Completed on STM32 |
+| `1` | `INVALID_LENGTH` | Unsupported DLC |
+| `2` | `INVALID_PAYLOAD` | Invalid channel or attenuation |
+| `3` | `UNSUPPORTED` | Not a controller command |
+| `4` | `HARDWARE` | Hardware operation failed |
+| `5` | `BUSY` | Cannot accept command |
+| `6` | `SEQUENCE_REUSE` | Same key, different request bytes |
+| `7` | `BROADCAST_NOT_ALLOWED` | Non-safe broadcast |
 
-A receiver without `PROTOCOL_INFO` is treated as protocol v1.0. Configured receivers must
-advertise v1.1 or newer and all required feature flags before the monitor reports them healthy.
+## Status and discovery
 
-## Physical configuration
+`PING` returns one STATUS frame:
 
-The repository configures:
+```text
+0 protocol major (2)
+1 protocol minor (1)
+2 protocol patch (0)
+3 node ID
+4 health flags
+5 RX-drop count low byte
+6 TX-drop count low byte
+7 invalid-command count low byte
+```
 
-- STM32F072 bxCAN at 48 MHz: prescaler 6, BS1 13, BS2 2;
-- Raspberry Pi SocketCAN at 500 kbit/s, 87.5% sample point, SJW 1;
-- automatic bus restart after 100 ms on the Pi.
+Version matching is exact.
 
-The bus requires exactly two 120 Ω termination resistors, a common CAN reference, a linear
-trunk, and short stubs.
+## Contract vectors
 
-## Acceptance filters
+- Source: `protocol/v2.1-vectors.toml`
+- Generated C: `protocol/generated/protocol_vectors.h`
 
-The STM32 accepts only extended data frames from controller node `0` addressed to its own node
-ID or broadcast address `31`. Hardware filters reject standard and remote frames; firmware
-rechecks frame format, source, and destination before dispatch.
-
-## Source of truth
-
-The executable contract is maintained in:
-
-- `protocol/v1.1-vectors.toml`
-- `protocol/generated/protocol_vectors.h`
-- `pi/src/beamcontrol/protocol.py`
-- `stm32/app/src/can_protocol.c`
-
-Run `make protocol-check` after any protocol change.
+```bash
+python3 tools/generate-protocol-vectors.py
+```

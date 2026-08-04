@@ -1,7 +1,4 @@
-"""Contract test: the Python protocol implementation must agree with the
-shared protocol vectors (protocol/v1.1-vectors.toml). The C firmware consumes
-the same vectors via the generated header, so this catches Python<->C drift.
-"""
+"""Contract test: Python and C must agree with protocol/v2.1-vectors.toml."""
 
 from __future__ import annotations
 
@@ -12,7 +9,7 @@ import pytest
 
 from beamcontrol import protocol as P
 
-VECTORS = Path(__file__).resolve().parents[3] / "protocol" / "v1.1-vectors.toml"
+VECTORS = Path(__file__).resolve().parents[3] / "protocol" / "v2.1-vectors.toml"
 DATA = tomllib.loads(VECTORS.read_text(encoding="utf-8"))
 
 
@@ -31,25 +28,45 @@ def test_id_vector_decodes(v):
     assert f["sequence"] == v["sequence"]
 
 
+def _validate_command(msg_type: int, payload: list[int]) -> None:
+    if msg_type == P.SET_PHASE:
+        if len(payload) == 2:
+            P.validate_phase_state(payload[0])
+            P.validate_channel(payload[1])
+        elif len(payload) == 4:
+            P.validate_phase_states(payload)
+        else:
+            raise ValueError("SET_PHASE requires DLC 2 or 4")
+    elif msg_type == P.SET_VGA:
+        if len(payload) == 2:
+            P.validate_attenuation(payload[0])
+            P.validate_channel(payload[1])
+        elif len(payload) == 4:
+            P.validate_attenuations(payload)
+        else:
+            raise ValueError("SET_VGA requires DLC 2 or 4")
+    elif msg_type == P.SET_COMBINED:
+        if len(payload) == 3:
+            P.validate_phase_state(payload[0])
+            P.validate_channel(payload[1])
+            P.validate_attenuation(payload[2])
+        elif len(payload) == 8:
+            P.validate_phase_states(payload[:4])
+            P.validate_attenuations(payload[4:])
+        else:
+            raise ValueError("SET_COMBINED requires DLC 3 or 8")
+    elif msg_type == P.ENTER_SAFE:
+        if len(payload) != 1:
+            raise ValueError("ENTER_SAFE requires DLC 1")
+        P.validate_channel(payload[0])
+
+
 @pytest.mark.parametrize("v", DATA["commands"], ids=lambda v: v["name"])
 def test_command_validation(v):
     payload = list(v["data"])
     if v["valid"]:
-        # Valid command: payload-specific validation must accept it.
-        if v["type"] == P.SET_PHASE:
-            P.validate_payload(payload[1], phase_state=payload[0])
-        elif v["type"] == P.SET_VGA:
-            P.validate_payload(0, atten_db=payload[0])
-        elif v["type"] == P.ENTER_SAFE:
-            P.validate_payload(payload[0])
-    else:
-        # Invalid command: expect validation to reject channel/attenuation.
-        # Reserved-byte rejection (result 6) is a decode-layer check, not
-        # covered by validate_payload here.
-        if v["result"] in (2,):  # INVALID_PAYLOAD
-            if v["type"] == P.SET_PHASE:
-                with pytest.raises(ValueError):
-                    P.validate_payload(payload[1], phase_state=payload[0])
-            elif v["type"] == P.SET_VGA:
-                with pytest.raises(ValueError):
-                    P.validate_payload(0, atten_db=payload[0])
+        _validate_command(v["type"], payload)
+        return
+
+    with pytest.raises(ValueError):
+        _validate_command(v["type"], payload)

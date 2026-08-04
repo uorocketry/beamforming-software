@@ -1,56 +1,39 @@
 # Releases
 
-GitHub Releases publish the Raspberry Pi 5 deployment bundle. STM32 firmware is not
-pre-addressed or attached because every physical receiver board needs an explicitly chosen,
-unique CAN node ID.
+Tagged releases publish the ARM64 Raspberry Pi bundle. STM32 images are built separately because each board needs a unique CAN node ID.
 
-## Create a release
+## Create
 
-1. Update the package version in `pi/pyproject.toml`.
-2. Regenerate the lockfile:
+1. Update `pi/pyproject.toml`.
+2. Run:
 
    ```bash
    .tools/bin/uv lock --project pi
-   ```
-
-3. Run the local gate:
-
-   ```bash
    make check
    ```
 
-4. Commit the release changes and push a matching tag. For version `0.1.0`:
+3. Commit and push a matching tag:
 
    ```bash
    git tag -a v0.1.0 -m "BeamControl v0.1.0"
    git push origin v0.1.0
    ```
 
-The release workflow verifies that the tag matches the package version, runs the full test and
-representative firmware-build gate, builds the ARM64 Pi bundle, smoke-tests its offline
-installation, creates a checksum, and publishes the GitHub Release.
+The workflow verifies the version, runs checks, builds and offline-smoke-tests the Pi bundle, creates checksums, and publishes the release.
 
-## Release contents
-
-A tagged release contains:
+## Contents
 
 - `beamcontrol-pi-<revision>.tar.gz`
 - `beamcontrol-pi-SHA256SUMS.txt`
 
-Build STM32 firmware separately for each board:
+Build board firmware explicitly:
 
 ```bash
 make firmware NODE=<1..30>
 ```
 
-Do not flash two boards with the same node ID on the same CAN bus.
-
 ## CI artifacts
 
-Every push and pull request builds and smoke-tests the Pi bundle on an ARM64 GitHub runner.
-That temporary artifact is useful for testing a branch. Tagged GitHub Releases are the stable
-deployment source.
+Every push/PR produces a temporary ARM64 bundle for branch testing. Use tagged releases for deployment.
 
-GitHub CI cannot test physical CAN wiring, MCP2515 hardware, device-tree overlays, or systemd
-startup on the flight Pi. Complete those checks using the
-[Pi deployment guide](pi-provisioning.md#verify-the-installation).
+CI does not test physical CAN, MCP2515 overlays, systemd on the flight Pi, or RF hardware. See [Pi verification](pi-provisioning.md#verify).

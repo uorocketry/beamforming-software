@@ -1,4 +1,4 @@
-#include "build_info.h"
+#include "platform/build_info.h"
 
 #include <assert.h>
 #include <stdint.h>

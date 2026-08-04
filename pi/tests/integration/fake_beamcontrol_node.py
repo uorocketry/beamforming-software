@@ -1,9 +1,7 @@
-"""A fake BeamControl node that listens on a CAN bus and replies per protocol v1.1.
+"""A fake BeamControl node that listens on a CAN bus and replies per protocol v2.1.
 
 Used for virtual-bus integration tests (python-can `virtual` interface). It
-implements just enough of the wire protocol to exercise the client: SET_*
-commands get an ACK, invalid ones an ERROR, and PING@0xFFFF gets a legacy
-STATUS followed by PROTOCOL_INFO.
+implements enough of the wire protocol to exercise commands and STATUS.
 """
 
 from __future__ import annotations
@@ -41,29 +39,39 @@ class FakeBeamControlNode:
             f = P.parse_id(msg.arbitration_id)
             data = bytes(msg.data)
             if f["type"] == P.PING:
+                major, minor, patch = P.PROTOCOL_VERSION
                 self._reply(
                     P.STATUS,
                     f["source"],
                     f["sequence"],
-                    bytes([0x01, self.node_id, 0, 0, 23, 0, 0, 0]),
+                    bytes(
+                        [
+                            major,
+                            minor,
+                            patch,
+                            self.node_id,
+                            0,
+                            0,
+                            0,
+                            0,
+                        ]
+                    ),
                 )
-                if f["sequence"] == P.SEQ_CAPABILITIES:
-                    self._reply(
-                        P.STATUS,
-                        f["source"],
-                        f["sequence"],
-                        bytes(
-                            [P.STATUS_SUBTYPE_PROTOCOL_INFO, 1, 1, 0, 0xFF, 0x00, self.node_id, 0]
-                        ),
-                    )
             elif f["type"] in (P.SET_PHASE, P.SET_VGA, P.SET_COMBINED, P.ENTER_SAFE):
-                ok = True
-                if f["type"] in (P.SET_PHASE, P.ENTER_SAFE):
-                    ok = len(data) > 1 and data[1] <= 3
+                if f["type"] == P.SET_PHASE:
+                    ok = len(data) == 4 or (len(data) == 2 and data[1] <= P.PHASE_ADDR_MAX)
                 elif f["type"] == P.SET_VGA:
-                    ok = bool(data) and data[0] <= 23
-                else:  # SET_COMBINED
-                    ok = len(data) > 2 and data[1] <= 3 and data[2] <= 23
+                    ok = (len(data) == 4 and all(value <= P.ATTEN_DB_MAX for value in data)) or (
+                        len(data) == 2 and data[0] <= P.ATTEN_DB_MAX and data[1] <= P.PHASE_ADDR_MAX
+                    )
+                elif f["type"] == P.SET_COMBINED:
+                    ok = (
+                        len(data) == 8 and all(value <= P.ATTEN_DB_MAX for value in data[4:])
+                    ) or (
+                        len(data) == 3 and data[1] <= P.PHASE_ADDR_MAX and data[2] <= P.ATTEN_DB_MAX
+                    )
+                else:
+                    ok = len(data) == 1 and data[0] <= P.PHASE_ADDR_MAX
                 if ok:
                     self._reply(P.ACK, f["source"], f["sequence"], bytes([f["type"], P.RES_OK]))
                 else:

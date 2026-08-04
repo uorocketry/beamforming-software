@@ -1,58 +1,52 @@
 # Contributing
 
-Thanks for helping with the uORocketry BeamControl beamforming software. This is a small
-team project, so keep changes minimal and reviewable.
+Keep changes small, tested, and reviewable.
 
-## Repo layout
+## Layout
 
-- `pi/` — Raspberry Pi CAN controller (Python, `src/beamcontrol` package, console entry points `beamctl` and `beamd`).
-- `stm32/` — STM32 embedded firmware (C, libopencm3). CAN protocol v1.1 + prioritized TX queue.
-- `docs/` — project knowledge base (protocol spec, hardware, operations).
-- `protocol/` — shared, language-neutral protocol test vectors.
-- `tools/` — repo orchestration (toolchain/dependency fetch, generators, bundle builder).
+- `pi/`: Python 3.11 controller, `beamctl`, `beamd`
+- `stm32/`: STM32F072 firmware in C/libopencm3
+- `protocol/`: shared Python/C vectors
+- `simulation/`: Docker, SocketCAN, Renode E2E
+- `tools/`: setup, generators, bundles
+- `docs/`: protocol, RF, operations
 
-## The one command interface
+## Commands
 
-Everything runs through the root `Makefile`. Do not scatter setup instructions.
+Use the root `Makefile`:
 
 ```bash
-make setup     # fetch pinned uv + ARM toolchain + libopencm3, sync Python env
-make doctor    # diagnose required and optional environment capabilities
-make test      # pi tests + native firmware unit tests + protocol contract
-make check     # lint + tests + one representative firmware build
+make setup
+make doctor
+make test
+make check
 make firmware NODE=1
 ```
 
-## Before you open a PR
+Before a PR:
 
-- `make check` must pass clean (lint, all tests, and a representative firmware build).
-- New/edited Python must be covered by a test in `pi/tests/` (unit with a fake
-  transport, or integration on the virtual CAN bus).
-- Protocol changes must update `protocol/v1.1-vectors.toml` and regenerate the
-  C header: `python3 tools/generate-protocol-vectors.py`. Both Python and C
-  tests consume the same vectors, so they cannot silently drift.
-- Firmware queue/priority logic goes in `can_tx_queue.c/h` (host-testable), not
-  buried in `can_bus.c`.
+- Run `make check`.
+- Add Python tests under `pi/tests/`.
+- For protocol changes, edit `protocol/v2.1-vectors.toml` and run `python3 tools/generate-protocol-vectors.py`.
+- Keep queue/priority logic in host-testable `can_tx_queue.c/h`.
 
 ## Style
 
-- Python: `ruff` (see `pi/pyproject.toml`), line length 100, target 3.11.
-- C: `-Wall -Wextra -Werror`, the firmware never builds with warnings.
-- No em dashes in prose; keep messages human and direct.
+- Python: Ruff, 100 columns, Python 3.11.
+- C: C2x, `-Wall -Wextra -Werror -pedantic`.
+- Markdown: direct, concise, no duplicated explanations.
+- Repository automation: Python, not new shell scripts.
 
-## Dependencies
+## Managed dependencies
 
-- `libopencm3` is pinned by commit + SHA256 in `stm32/third_party/libopencm3.lock`
-  and fetched by `tools/fetch_libopencm3.py` into gitignored `stm32/.deps/`.
-- The ARM cross-toolchain is fetched into gitignored `.tools/` by
-  `tools/fetch_arm_toolchain.py`.
-- `make setup` bootstraps the pinned `uv` binary into `.tools/`; only a host
-  Python 3.10+ interpreter and the documented OS packages are needed first.
-- Repository automation is Python. Do not add new shell scripts.
+`make setup` installs pinned tools only in gitignored paths:
+
+- `.tools/`: `uv`, ARM GNU toolchain, caches
+- `stm32/.deps/`: libopencm3
+- `pi/.venv/`: Python environment
+
+libopencm3 is pinned in `stm32/third_party/libopencm3.lock`.
 
 ## Releases
 
-Normal CI builds and smoke-tests the ARM64 Raspberry Pi 5 deployment bundle and
-uploads it as a temporary artifact. Permanent GitHub Releases are created
-automatically when a `v<version>` tag matching `pi/pyproject.toml` is pushed.
-See [`docs/operations/releases.md`](docs/operations/releases.md).
+CI builds a temporary ARM64 Pi bundle. A matching `v<version>` tag creates a GitHub Release. See [releases](docs/operations/releases.md).

@@ -1,9 +1,8 @@
-"""BeamControlClient: drive BeamControl receiver boards over CAN per protocol v1.1.
+"""BeamControlClient: drive BeamControl receiver boards over CAN per protocol v2.1.
 
 Contract (must hold for the firmware's single-entry replay cache to be safe):
 - At most one state-changing transaction outstanding per receiver node.
-- A retry reuses the EXACT serialized message (same arbitration ID, DLC, and
-  data bytes) — never rebuild with different zero padding.
+- A retry reuses the exact serialized message.
 - A sequence is never reused for a different command while still in flight.
 - Responses are matched by destination, source, sequence, and the ACK/ERROR
   payload's command type.
@@ -16,7 +15,7 @@ from __future__ import annotations
 
 import threading
 import time
-from collections.abc import Callable
+from collections.abc import Callable, Sequence
 from typing import Any
 
 import can
@@ -36,20 +35,48 @@ class BeamControlProtocolError(BeamControlError):
     """A response from the addressed node violated the wire protocol."""
 
 
-class ProtocolInfo:
-    __slots__ = ("major", "minor", "patch", "feature_flags", "node_id")
+class NodeStatus:
+    __slots__ = (
+        "major",
+        "minor",
+        "patch",
+        "node_id",
+        "health_flags",
+        "rx_dropped",
+        "tx_dropped",
+        "invalid_commands",
+    )
 
-    def __init__(self, major, minor, patch, feature_flags, node_id):
+    def __init__(
+        self,
+        major: int,
+        minor: int,
+        patch: int,
+        node_id: int,
+        health_flags: int,
+        rx_dropped: int,
+        tx_dropped: int,
+        invalid_commands: int,
+    ) -> None:
         self.major = major
         self.minor = minor
         self.patch = patch
-        self.feature_flags = feature_flags
         self.node_id = node_id
+        self.health_flags = health_flags
+        self.rx_dropped = rx_dropped
+        self.tx_dropped = tx_dropped
+        self.invalid_commands = invalid_commands
 
-    def __repr__(self):
+    @property
+    def version(self) -> tuple[int, int, int]:
+        return self.major, self.minor, self.patch
+
+    def __repr__(self) -> str:
         return (
-            f"ProtocolInfo(major={self.major}, minor={self.minor}, "
-            f"patch={self.patch}, flags=0x{self.feature_flags:04x}, node={self.node_id})"
+            f"NodeStatus(version={self.major}.{self.minor}.{self.patch}, "
+            f"node={self.node_id}, health=0x{self.health_flags:02x}, "
+            f"rx_dropped={self.rx_dropped}, tx_dropped={self.tx_dropped}, "
+            f"invalid={self.invalid_commands})"
         )
 
 
@@ -89,8 +116,6 @@ class BeamControlClient:
     # -- helpers ---------------------------------------------------------------
     def _next_seq(self) -> int:
         self._seq = (self._seq + 1) & P.SEQ_MASK
-        if self._seq == P.SEQ_CAPABILITIES:  # never use the discovery seq for config
-            self._seq = 0
         return self._seq
 
     def _make_msg(self, msg_type: int, destination: int, payload) -> tuple[can.Message, int]:
@@ -166,26 +191,51 @@ class BeamControlClient:
         raise BeamControlError(f"timeout node {destination}; final state unknown")
 
     def enter_safe(self, destination: int, channel: int) -> bytes:
-        P.validate_payload(channel)
+        P.validate_channel(channel)
         return self._transact(destination, P.ENTER_SAFE, [channel])
 
-    def set_phase(self, destination: int, phase_state: int, channel: int) -> bytes:
-        P.validate_payload(channel, phase_state=phase_state)
+    def set_phase(self, destination: int, phase_states: Sequence[int]) -> bytes:
+        return self._transact(destination, P.SET_PHASE, P.validate_phase_states(phase_states))
+
+    def set_phase_channel(self, destination: int, channel: int, phase_state: int) -> bytes:
+        P.validate_channel(channel)
+        P.validate_phase_state(phase_state)
         return self._transact(destination, P.SET_PHASE, [phase_state, channel])
 
-    def set_vga(self, destination: int, atten_db: int) -> bytes:
-        P.validate_payload(0, atten_db=atten_db)
-        return self._transact(destination, P.SET_VGA, [atten_db])
+    def set_vga(self, destination: int, attenuation_db: Sequence[int]) -> bytes:
+        return self._transact(destination, P.SET_VGA, P.validate_attenuations(attenuation_db))
+
+    def set_vga_channel(self, destination: int, channel: int, attenuation_db: int) -> bytes:
+        P.validate_channel(channel)
+        P.validate_attenuation(attenuation_db)
+        return self._transact(destination, P.SET_VGA, [attenuation_db, channel])
 
     def set_combined(
-        self, destination: int, phase_state: int, channel: int, atten_db: int
+        self, destination: int, phase_states: Sequence[int], attenuation_db: Sequence[int]
     ) -> bytes:
-        P.validate_payload(channel, phase_state=phase_state, atten_db=atten_db)
-        return self._transact(destination, P.SET_COMBINED, [phase_state, channel, atten_db])
+        phase_payload = P.validate_phase_states(phase_states)
+        vga_payload = P.validate_attenuations(attenuation_db)
+        return self._transact(destination, P.SET_COMBINED, phase_payload + vga_payload)
+
+    def set_combined_channel(
+        self,
+        destination: int,
+        channel: int,
+        phase_state: int,
+        attenuation_db: int,
+    ) -> bytes:
+        P.validate_channel(channel)
+        P.validate_phase_state(phase_state)
+        P.validate_attenuation(attenuation_db)
+        return self._transact(
+            destination,
+            P.SET_COMBINED,
+            [phase_state, channel, attenuation_db],
+        )
 
     def broadcast_enter_safe(self, channel: int) -> None:
         """Broadcast ENTER_SAFE to all nodes (dest 31). No response is sent."""
-        P.validate_payload(channel)
+        P.validate_channel(channel)
         with self._io_lock:
             message = can.Message(
                 arbitration_id=P.build_id(
@@ -198,58 +248,46 @@ class BeamControlClient:
             self._transport.send(message)
 
     # -- discovery / status -----------------------------------------------------
-    def discover(self, destination: int) -> tuple[bytes, ProtocolInfo | None]:
+    def discover(self, destination: int) -> NodeStatus:
         self._validate_unicast_destination(destination)
         with self._io_lock:
             return self._discover_locked(destination)
 
-    def _discover_locked(self, destination: int) -> tuple[bytes, ProtocolInfo | None]:
-        """PING sequence 0xFFFF. Returns (legacy_status_bytes, ProtocolInfo|None).
-
-        The node answers with the legacy STATUS frame first, then a
-        PROTOCOL_INFO STATUS frame. A v1.0 node sends only the legacy STATUS.
-        """
+    def _discover_locked(self, destination: int) -> NodeStatus:
+        sequence = self._next_seq()
         msg = can.Message(
-            arbitration_id=P.build_id(P.PING, destination, self._source, P.SEQ_CAPABILITIES),
+            arbitration_id=P.build_id(P.PING, destination, self._source, sequence),
             is_extended_id=True,
             is_remote_frame=False,
             data=bytearray(),
         )
         self._transport.send(msg)
         deadline = self._clock() + self._timeout
-        legacy = None
-        info = None
         while self._clock() < deadline:
             reply = self._transport.recv(timeout=max(0.0, deadline - self._clock()))
-            if reply is None or not reply.is_extended_id:
+            if reply is None or not reply.is_extended_id or reply.is_remote_frame:
                 continue
             f = P.parse_id(reply.arbitration_id)
             if (
                 f["source"] != destination
                 or f["dest"] != self._source
                 or f["type"] != P.STATUS
-                or f["sequence"] != P.SEQ_CAPABILITIES
+                or f["sequence"] != sequence
             ):
                 continue
             d = bytes(reply.data)
             if len(d) != 8:
                 raise BeamControlProtocolError("STATUS must have DLC 8")
-            if d[0] == P.STATUS_SUBTYPE_PROTOCOL_INFO:
-                # node id must match, reserved byte must be zero
-                if d[6] != destination or d[7] != 0:
-                    continue
-                info = ProtocolInfo(d[1], d[2], d[3], (d[5] << 8) | d[4], d[6])
-            elif legacy is None:
-                # legacy STATUS: byte0 = supported major version, byte1 = node id
-                if d[0] != 1 or d[1] != destination:
-                    continue
-                legacy = d
-            if legacy is not None and info is not None:
-                if info.major != legacy[0]:
-                    raise BeamControlProtocolError(
-                        "legacy STATUS and PROTOCOL_INFO major versions disagree"
-                    )
-                break
-        if legacy is None:
-            raise BeamControlError(f"no STATUS from node {destination}")
-        return legacy, info
+            if d[3] != destination:
+                continue
+            return NodeStatus(
+                d[0],
+                d[1],
+                d[2],
+                d[3],
+                d[4],
+                d[5],
+                d[6],
+                d[7],
+            )
+        raise BeamControlError(f"no STATUS from node {destination}")

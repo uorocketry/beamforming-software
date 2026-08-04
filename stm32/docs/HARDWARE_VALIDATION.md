@@ -1,105 +1,103 @@
-# Hardware Validation Checklist
+# Hardware validation checklist
 
-Complete this checklist for every PCB revision and every release artifact before enabling an operational RF path. Record the firmware Git revision, ELF SHA-256, board revision, board serial number, test equipment, operator, and date with the evidence.
+Run for every PCB revision and release artifact before enabling RF. Record firmware revision, ELF SHA256, board revision/serial, equipment, operator, date, and evidence.
 
 ## Identification
 
-- [ ] Populated MCU marking confirms STM32F072R8T6.
-- [ ] Schematic and PCB revision are recorded.
-- [ ] Firmware revision, compiled CAN node ID, and ELF SHA-256 are recorded.
-- [ ] Power rails and logic levels match all connected devices.
-- [ ] External pull resistors establish documented RF-safe reset states.
+- [ ] MCU is STM32F072R8T6.
+- [ ] Schematic and PCB revisions recorded.
+- [ ] Firmware revision, CAN node ID, and ELF SHA256 recorded.
+- [ ] Rails and logic levels verified.
+- [ ] Pull resistors provide RF-safe reset states.
 
-## Power and reset
+## Power/reset
 
-- [ ] Test normal power ramp.
-- [ ] Test slow power ramp.
-- [ ] Test repeated power cycling.
-- [ ] Test brownout and recovery.
-- [ ] Confirm watchdog reset recovery.
-- [ ] Confirm reset flags and retained diagnostics are readable after reset.
-- [ ] Confirm corrupted or erased retained RAM is safely reinitialized.
-- [ ] Confirm three incomplete boots cause safe lockout on the next boot.
-- [ ] Confirm a newly flashed build clears the previous build's lockout streak.
+- [ ] Normal and slow ramps tested.
+- [ ] Repeated power cycles tested.
+- [ ] Brownout/recovery tested.
+- [ ] Watchdog recovery verified.
+- [ ] Reset flags and retained diagnostics readable.
+- [ ] Invalid retained RAM reinitializes safely.
+- [ ] Three incomplete boots trigger safe lockout.
+- [ ] New firmware revision clears the prior lockout streak.
 
-## Clock behavior
+## Clock
 
-- [ ] HSE starts and the system runs at 48 MHz.
-- [ ] A missing or failed HSE causes the bounded HSI48 fallback.
-- [ ] SPI clock frequencies are correct in both clock modes.
-- [ ] Clock-security failure records a fault and resets the MCU.
+- [ ] HSE runs at 48 MHz.
+- [ ] Missing HSE uses bounded HSI48 fallback.
+- [ ] SPI clocks correct in both modes.
+- [ ] Clock-security failure records fault and resets.
 
-## VGA transaction
+## F0480 VGA
 
-Capture CS, SCK, and data using a logic analyzer or oscilloscope.
+Capture CS, SCK, and data.
 
-- [ ] CS is high while idle.
-- [ ] SPI mode is CPOL=0, CPHA=0.
-- [ ] Exactly eight clock edges occur.
-- [ ] The 23 dB command is `0x5c`.
-- [ ] Logical data order is LSB-first.
-- [ ] CS setup, hold, and pulse timing meet the current F0480 datasheet.
-- [ ] Measured attenuation agrees with the requested setting for every value from 0 through 23 dB.
-- [ ] A forced pre-write timeout leaves CS high.
-- [ ] A forced in-flight timeout does not intentionally latch partial data before reset.
+- [ ] CS idle high.
+- [ ] CPOL=0, CPHA=0.
+- [ ] Eight clocks per word.
+- [ ] 23 dB command is `0x5C`.
+- [ ] Data is LSB-first.
+- [ ] CS timing meets datasheet.
+- [ ] Measured attenuation matches every setting `0..23` dB.
+- [ ] Each channel selector reaches the intended F0480 only.
+- [ ] Pre-write timeout leaves CS high.
+- [ ] In-flight timeout does not intentionally latch partial data before reset.
 
-## Phase-shifter transaction
+## PE44820 phase shifter
 
-Capture LE, SCK, data, and serial-programming select.
+Capture LE, SCK, data, and serial-select.
 
-- [ ] Serial-programming select is high before programming.
-- [ ] LE is high while idle and low during the transfer.
-- [ ] SPI mode is CPOL=0, CPHA=0.
-- [ ] Exactly 13 clock edges occur.
-- [ ] The 205.3-degree, address-3 raw command is `0x092c`.
-- [ ] The phase and address fields appear in the device-required logical order.
-- [ ] OPT tracks phase-state bit D6 over representative states on both sides of each transition.
-- [ ] LE setup, hold, and pulse timing meet the current PE44820 datasheet.
-- [ ] Measured RF phase agrees with the requested state over all 256 states or an approved sampling plan.
-- [ ] A forced pre-write timeout leaves LE high.
-- [ ] A forced in-flight timeout does not intentionally latch partial data before reset.
+- [ ] Serial-select high before programming.
+- [ ] LE idle high and low during transfer.
+- [ ] CPOL=0, CPHA=0.
+- [ ] Thirteen clocks per word.
+- [ ] State 146 -> `0x08D`; address 3 -> `0x162C`.
+- [ ] Phase/address fields use required order.
+- [ ] Representative states match `docs/PE44820_Lookup_2.4GHz.csv`, including OPT.
+- [ ] LE timing meets datasheet.
+- [ ] Measured phase matches all 256 states or approved sample plan.
+- [ ] Pre-write timeout leaves LE high.
+- [ ] In-flight timeout does not intentionally latch partial data before reset.
 
-## CAN network
+## CAN
 
-Use the exact node-specific CI artifacts and the procedure in [`CAN_PROTOCOL.md`](CAN_PROTOCOL.md).
-
-- [ ] CAN1 RX is PA11/AF4 and CAN1 TX is PA12/AF4 on the tested board revision.
-- [ ] The external transceiver is compatible with the board's 3.3 V logic and bus voltage.
-- [ ] CANH, CANL, and common ground are verified against the actual connector pinout.
-- [ ] Exactly two 120 Ω terminators are installed at the physical ends of the test bus.
-- [ ] Measured bitrate is 500 kbit/s with the expected sample point.
-- [ ] Nodes 1, 2, and 3 each answer a unicast ping with their own node ID.
-- [ ] Each node ignores unicast frames addressed to the other two nodes.
-- [ ] Standard-ID and remote frames do not reach the application queue.
-- [ ] A unicast valid command receives a sequence-matched ACK.
-- [ ] A unicast invalid length or value receives a sequence-matched ERROR.
-- [ ] A broadcast safe command changes all nodes and produces no responses.
-- [ ] Combined commands apply 23 dB attenuation before the phase transition and apply the requested final attenuation afterward.
-- [ ] Receive-queue overflow can be induced in a controlled test and appears in STATUS health flags.
-- [ ] Transmit-mailbox exhaustion can be induced in a controlled test and appears in STATUS health flags.
-- [ ] Disconnecting the bus produces bus-off where expected and automatic recovery after reconnection.
-- [ ] The Raspberry Pi SocketCAN tool completes repeated ping, phase, VGA, combined, and safe cycles without unexpected timeouts.
-- [ ] RJ11 and RJ45 harnesses are separately documented; no connector pinout is inferred from connector type alone.
+- [ ] PA11/AF4 RX and PA12/AF4 TX verified.
+- [ ] Transceiver voltage compatibility verified.
+- [ ] CANH/CANL/ground connector mapping verified.
+- [ ] Two 120-ohm terminators at bus ends.
+- [ ] 500 kbit/s and sample point measured.
+- [ ] Nodes 1, 2, 3 answer only their unicast pings.
+- [ ] Standard-ID and remote frames rejected.
+- [ ] Valid unicast gets sequence-matched ACK.
+- [ ] Invalid DLC/value gets sequence-matched ERROR.
+- [ ] Broadcast safe changes all nodes with no responses.
+- [ ] Individual and bulk phase/VGA/combined payloads verified.
+- [ ] Phase changes apply 23 dB before phase and restore/apply afterward.
+- [ ] RX overflow appears in STATUS.
+- [ ] TX exhaustion appears in STATUS.
+- [ ] Bus-off and recovery verified.
+- [ ] Pi completes repeated command cycles without unexpected timeout.
+- [ ] RJ11/RJ45 pinouts documented independently of connector type.
 
 ## Fault injection
 
-- [ ] Disconnect or hold each SPI clock/data line and verify bounded failure behavior.
-- [ ] Force SPI status errors where practical and verify recorded fault codes.
-- [ ] Trigger HardFault and verify reset plus retained fault history.
-- [ ] Trigger an unused peripheral interrupt and verify reset plus retained fault history.
-- [ ] Verify the watchdog is not refreshed in a fault path.
+- [ ] Disconnect/hold each SPI line; failure remains bounded.
+- [ ] Inject SPI errors; fault codes recorded.
+- [ ] HardFault resets and records history.
+- [ ] Unused interrupt resets and records history.
+- [ ] Watchdog is not refreshed in fault paths.
 
-## Environmental and endurance testing
+## Environment/endurance
 
-- [ ] Test at minimum and maximum qualified supply voltage.
-- [ ] Test over the intended temperature range.
-- [ ] Perform repeated startup and command cycles.
-- [ ] Perform an EMI susceptibility test appropriate to the installation.
-- [ ] Run a soak test for the intended deployment duration or an approved accelerated duration.
+- [ ] Min/max qualified supply voltage.
+- [ ] Intended temperature range.
+- [ ] Repeated startup/command cycles.
+- [ ] Installation-appropriate EMI test.
+- [ ] Deployment-duration or approved accelerated soak.
 
 ## Release approval
 
-- [ ] All automated CI checks pass for the exact revision.
-- [ ] The tested ELF checksum matches the archived release artifact.
-- [ ] All deviations are documented and accepted by the responsible hardware and firmware reviewers.
-- [ ] Rollback instructions and the previous qualified artifact are available.
+- [ ] CI passes for exact revision.
+- [ ] Tested ELF SHA256 matches archive.
+- [ ] Deviations accepted and recorded.
+- [ ] Rollback procedure and prior qualified artifact available.

@@ -1,37 +1,18 @@
-# BeamControl documentation
+# Documentation
 
-These documents describe the software and firmware contained in this repository.
+- [Overview](overview.md): system roles and test layers
+- [CAN protocol v2.1](can-protocol.md): wire contract
+- [RF encoding](rf-control.md): PE44820/F0480 commands and ACK limits
+- [Firmware](firmware.md): target and build
+- [Developer setup](operations/developer-setup.md)
+- [Pi deployment](operations/pi-provisioning.md)
+- [Releases](operations/releases.md)
+- [Virtual E2E](../simulation/README.md)
+- [Pi controller](../pi/README.md)
+- [STM32 firmware](../stm32/README.md)
 
-## System model
+Reference files:
 
-```text
-Operator / browser / beamctl
-            |
-Raspberry Pi 5 + CAN HAT       controller node 0
-            |
-        CAN 2.0B bus
-            |
-STM32 receiver board           receiver node 1..30
-  |- RF channel 0
-  |- RF channel 1
-  |- RF channel 2
-  `- RF channel 3
-```
-
-One complete STM32 receiver board is one CAN node. Its four RF paths are channels inside that
-node. Board-local components such as phase shifters and DVGAs are not CAN nodes.
-
-## Documents
-
-- [Project overview](overview.md) — architecture, original STM32 comparison, command flow, simulation, and test scope
-- [CAN protocol v1.1](can-protocol.md) — implemented Python/C wire contract
-- [Firmware](firmware.md) — STM32 target and build entry points
-- [Developer setup](operations/developer-setup.md) — local environment and checks
-- [Raspberry Pi 5 deployment](operations/pi-provisioning.md) — installation and verification
-- [Release process](operations/releases.md) — CI artifacts and tagged releases
-- [Virtual end-to-end simulation](../simulation/README.md) — Docker, SocketCAN, and Renode
-
-Component-specific details are also documented next to their code:
-
-- [Raspberry Pi controller](../pi/README.md)
-- [STM32 receiver firmware](../stm32/README.md)
+- `pere_s_a0006625230_1-2279326.pdf`: PE44820
+- `REN_F0480_DST_20150427_1.pdf`: F0480
+- `PE44820_Lookup_2.4GHz.csv`: calibrated phase lookup
