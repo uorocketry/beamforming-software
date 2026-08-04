@@ -79,6 +79,25 @@ def test_set_phase_round_trip(buses):
         driver.stop()
 
 
+def test_individual_round_trips(buses):
+    ctrl, node = buses
+    fake = FakeBeamControlNode(node, 3)
+    driver = NodeDriver(fake)
+    driver.start()
+    try:
+        client = BeamControlClient(VirtualTransport(ctrl), timeout=0.5, retries=0)
+        assert client.set_phase_channel(3, 2, 128) == bytes([P.SET_PHASE, P.RES_OK])
+        assert client.set_vga_channel(3, 1, 8) == bytes([P.SET_VGA, P.RES_OK])
+        assert client.set_combined_channel(3, 3, 64, 12) == bytes([P.SET_COMBINED, P.RES_OK])
+        assert [bytes(message.data) for message in fake.seen[:3]] == [
+            bytes([128, 2]),
+            bytes([8, 1]),
+            bytes([64, 3, 12]),
+        ]
+    finally:
+        driver.stop()
+
+
 def test_invalid_bulk_payload_rejected_client_side(buses):
     """Invalid bulk lengths are rejected before any CAN traffic."""
     ctrl, node = buses
@@ -100,7 +119,7 @@ def test_discover_returns_protocol_info(buses):
         client = BeamControlClient(VirtualTransport(ctrl), timeout=0.5, retries=0)
         legacy, info = client.discover(3)
         assert info is not None
-        assert info.major == 2 and info.minor == 0
+        assert info.major == 2 and info.minor == 1
         assert info.node_id == 3
         assert info.feature_flags == P.FEATURE_FLAGS
         assert legacy[0] == P.PROTOCOL_MAJOR

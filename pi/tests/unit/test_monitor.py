@@ -15,7 +15,7 @@ FLAGS = P.FEATURE_FLAGS
 class FakeClient:
     def discover(self, destination: int) -> tuple[bytes, ProtocolInfo | None]:
         if destination == 1:
-            return bytes([2, 1, 0, 1, 0, 0, 0, 0]), ProtocolInfo(2, 0, 0, P.FEATURE_FLAGS, 1)
+            return bytes([2, 1, 0, 1, 0, 0, 0, 0]), ProtocolInfo(2, 1, 0, P.FEATURE_FLAGS, 1)
         raise BeamControlError(f"no STATUS from node {destination}")
 
 
@@ -76,8 +76,8 @@ def test_v3_rejected() -> None:
     assert configured_node_failure(3, ProtocolInfo(3, 0, 0, FLAGS, 3)) is not None
 
 
-def test_v20_accepted() -> None:
-    assert configured_node_failure(3, ProtocolInfo(2, 0, 0, FLAGS, 3)) is None
+def test_v20_rejected() -> None:
+    assert configured_node_failure(3, ProtocolInfo(2, 0, 0, FLAGS, 3)) is not None
 
 
 def test_v21_accepted() -> None:
@@ -85,4 +85,4 @@ def test_v21_accepted() -> None:
 
 
 def test_missing_features_rejected() -> None:
-    assert configured_node_failure(3, ProtocolInfo(2, 0, 0, 0, 3)) is not None
+    assert configured_node_failure(3, ProtocolInfo(2, 1, 0, 0, 3)) is not None

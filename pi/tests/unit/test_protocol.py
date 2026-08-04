@@ -1,4 +1,4 @@
-"""Host-runnable regression tests for the BeamControl v2.0 protocol module.
+"""Host-runnable regression tests for the BeamControl v2.1 protocol module.
 
 Run:  pytest pi/tests/unit/test_protocol.py -v
 """
@@ -76,6 +76,16 @@ class TestValidation(unittest.TestCase):
         with self.assertRaises(ValueError):
             P.validate_phase_states([0, 1, 2])
 
+    def test_individual_values(self):
+        self.assertEqual(P.validate_phase_state(255), 255)
+        self.assertEqual(P.validate_attenuation(23), 23)
+        for invalid in (-1, 256, True):
+            with self.assertRaises(ValueError):
+                P.validate_phase_state(invalid)
+        for invalid in (-1, 24, True):
+            with self.assertRaises(ValueError):
+                P.validate_attenuation(invalid)
+
 
 class TestConstants(unittest.TestCase):
     def test_type_numbers(self):
@@ -95,10 +105,11 @@ class TestConstants(unittest.TestCase):
     def test_discovery_sequence_reserved(self):
         self.assertEqual(P.SEQ_CAPABILITIES, 0xFFFF)
 
-    def test_protocol_version_and_bulk_feature(self):
-        self.assertEqual((P.PROTOCOL_MAJOR, P.PROTOCOL_MINOR, P.PROTOCOL_PATCH), (2, 0, 0))
+    def test_protocol_version_and_rf_features(self):
+        self.assertEqual((P.PROTOCOL_MAJOR, P.PROTOCOL_MINOR, P.PROTOCOL_PATCH), (2, 1, 0))
         self.assertEqual(P.RF_CHANNEL_COUNT, 4)
         self.assertTrue(P.FEATURE_FLAGS & P.FEATURE_BULK_RF_UPDATE)
+        self.assertTrue(P.FEATURE_FLAGS & P.FEATURE_INDIVIDUAL_RF_UPDATE)
 
 
 if __name__ == "__main__":

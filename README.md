@@ -1,98 +1,80 @@
 # BeamControl
 
-BeamControl controls a four-channel RF receiver board from a Raspberry Pi 5 over CAN.
-The repository contains the Pi software, STM32 firmware, shared protocol tests, deployment
-tooling, and hardware notes.
-
-## Implemented architecture
+BeamControl controls four-channel RF receiver boards from a Raspberry Pi 5 over CAN.
 
 ```text
-Operator / browser / beamctl
-            |
-Raspberry Pi 5 + CAN HAT       CAN controller node 0
-            |
-        CAN 2.0 bus
-            |
-STM32 receiver board           CAN receiver node 1..30
-  |- RF channel 0
-  |- RF channel 1
-  |- RF channel 2
-  `- RF channel 3
+Operator / beamctl / dashboard
+              |
+Raspberry Pi 5, CAN node 0
+              |
+       CAN 2.0B, 500 kbit/s
+              |
+STM32 receiver board, node 1..30
+  |- channel 0
+  |- channel 1
+  |- channel 2
+  `- channel 3
 ```
 
-One complete STM32 receiver board is one CAN node. Its four RF paths are channels inside
-that node. Phase shifters, DVGAs, LNAs, filters, detectors, and antenna elements are not CAN
-nodes. The Arduino/Wi-Fi and external ADC path shown in the REV3 design drawing is not part
-of the implemented software or CAN protocol.
+One board is one CAN node. Phase shifters and DVGAs are board-local devices.
 
-The protocol uses controller node `0`, receiver-board nodes `1..30`, and broadcast address
-`31`. See [`docs/can-protocol.md`](docs/can-protocol.md).
-
-For a concise explanation suitable for a walkthrough or presentation—including what was
-added beyond the original STM32 prototype—see [`docs/overview.md`](docs/overview.md).
-
-## Repository layout
+## Layout
 
 | Path | Purpose |
 |:--|:--|
-| `pi/` | Python 3.11 controller package, CLI, FastAPI dashboard, and Raspberry Pi deployment files |
-| `stm32/` | STM32F072 firmware for one receiver board |
-| `protocol/` | Shared Python/C protocol vectors |
-| `simulation/` | Docker Compose, Renode platform, and virtual end-to-end test |
-| `tools/` | Reproducible setup, diagnostics, bundle building, and checks |
-| `docs/` | Current architecture, operations, and hardware design notes |
+| `pi/` | Python client, CLI, monitor, dashboard, deployment |
+| `stm32/` | STM32F072 firmware |
+| `protocol/` | Shared Python/C vectors |
+| `simulation/` | Docker/SocketCAN/Renode E2E |
+| `tools/` | Setup, checks, bundles |
+| `docs/` | Protocol, RF, operations |
 
-## Develop and test
+## Develop
 
 ```bash
 make setup
 make doctor
 make test
 make check
-```
-
-`make check` runs linting, all host tests, the protocol contract, and one representative
-STM32 build. CI does not prebuild firmware for arbitrary receiver addresses.
-
-Run the real controller and STM32 ELF together over container-local virtual CAN with:
-
-```bash
 make simulation-test
 ```
 
-See [`simulation/README.md`](simulation/README.md) for scope and interactive use.
-
-## Build STM32 firmware
-
-A node ID is required and must be unique on the physical CAN bus:
+## Firmware
 
 ```bash
 make firmware NODE=1
 make firmware-size NODE=1
 ```
 
-Valid receiver-board IDs are `1..30`. The build writes `beamcontrol.elf`,
-`beamcontrol.bin`, and `beamcontrol.map` under `stm32/app/build/`.
+Node IDs are `1..30` and must be unique. Outputs are under `stm32/app/build/`.
 
-## Use the Pi controller
+## Controller
 
 ```bash
 beamctl discover
 beamctl ping 1
+
+# Individual
+beamctl set-phase 1 --state 128 --channel 2
+beamctl set-vga 1 --attenuation 8 --channel 2
+beamctl set-combined 1 --state 128 --attenuation 8 --channel 2
+
+# Bulk, channel order 0..3
 beamctl set-phase 1 --states 128 64 32 16
 beamctl set-vga 1 --attenuations 8 9 10 11
 beamctl set-combined 1 --states 64 65 66 67 --attenuations 12 13 14 15
+
+beamctl enter-safe 1 --channel 2
 beamd --config /etc/uorocketry/beamcontrol.toml
 ```
 
-The first positional ID is the receiver-board CAN node. The bulk RF commands always provide
-four values in channel order. `enter-safe` remains channel-specific and uses `--channel 0..3`.
+`beamd` serves a read-only dashboard on port `8080` and stays available when CAN is offline.
 
-`beamd` owns the CAN status monitor and serves a read-only FastAPI/Jinja2/HTMX dashboard on
-port `8080`. The dashboard remains available when CAN hardware or receiver boards are offline.
+## Docs
 
-For installation and releases, see:
-
+- [Overview](docs/overview.md)
+- [CAN protocol](docs/can-protocol.md)
+- [RF encoding](docs/rf-control.md)
 - [Developer setup](docs/operations/developer-setup.md)
-- [Raspberry Pi 5 deployment](docs/operations/pi-provisioning.md)
-- [Release process](docs/operations/releases.md)
+- [Pi deployment](docs/operations/pi-provisioning.md)
+- [Releases](docs/operations/releases.md)

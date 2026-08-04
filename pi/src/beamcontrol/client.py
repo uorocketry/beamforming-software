@@ -1,4 +1,4 @@
-"""BeamControlClient: drive BeamControl receiver boards over CAN per protocol v2.0.
+"""BeamControlClient: drive BeamControl receiver boards over CAN per protocol v2.1.
 
 Contract (must hold for the firmware's single-entry replay cache to be safe):
 - At most one state-changing transaction outstanding per receiver node.
@@ -170,12 +170,20 @@ class BeamControlClient:
         return self._transact(destination, P.ENTER_SAFE, [channel])
 
     def set_phase(self, destination: int, phase_states: Sequence[int]) -> bytes:
-        payload = P.validate_phase_states(phase_states)
-        return self._transact(destination, P.SET_PHASE, payload)
+        return self._transact(destination, P.SET_PHASE, P.validate_phase_states(phase_states))
+
+    def set_phase_channel(self, destination: int, channel: int, phase_state: int) -> bytes:
+        P.validate_channel(channel)
+        P.validate_phase_state(phase_state)
+        return self._transact(destination, P.SET_PHASE, [phase_state, channel])
 
     def set_vga(self, destination: int, attenuation_db: Sequence[int]) -> bytes:
-        payload = P.validate_attenuations(attenuation_db)
-        return self._transact(destination, P.SET_VGA, payload)
+        return self._transact(destination, P.SET_VGA, P.validate_attenuations(attenuation_db))
+
+    def set_vga_channel(self, destination: int, channel: int, attenuation_db: int) -> bytes:
+        P.validate_channel(channel)
+        P.validate_attenuation(attenuation_db)
+        return self._transact(destination, P.SET_VGA, [attenuation_db, channel])
 
     def set_combined(
         self, destination: int, phase_states: Sequence[int], attenuation_db: Sequence[int]
@@ -183,6 +191,22 @@ class BeamControlClient:
         phase_payload = P.validate_phase_states(phase_states)
         vga_payload = P.validate_attenuations(attenuation_db)
         return self._transact(destination, P.SET_COMBINED, phase_payload + vga_payload)
+
+    def set_combined_channel(
+        self,
+        destination: int,
+        channel: int,
+        phase_state: int,
+        attenuation_db: int,
+    ) -> bytes:
+        P.validate_channel(channel)
+        P.validate_phase_state(phase_state)
+        P.validate_attenuation(attenuation_db)
+        return self._transact(
+            destination,
+            P.SET_COMBINED,
+            [phase_state, channel, attenuation_db],
+        )
 
     def broadcast_enter_safe(self, channel: int) -> None:
         """Broadcast ENTER_SAFE to all nodes (dest 31). No response is sent."""

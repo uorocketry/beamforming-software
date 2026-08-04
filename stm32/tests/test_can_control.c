@@ -51,6 +51,7 @@ static void test_bulk_phase_plan(void)
 {
     const can_control_state_t current = initial_state();
     can_command_t command = command_of(CAN_MESSAGE_SET_PHASE);
+    command.bulk_update = true;
     const uint8_t requested[] = {146u, 128u, 64u, 0u};
     memcpy(command.phase_states, requested, sizeof(requested));
 
@@ -82,6 +83,7 @@ static void test_bulk_phase_plan_attenuates_then_restores(void)
         .attenuation_db = {8u, 23u, 12u, 23u},
     };
     can_command_t command = command_of(CAN_MESSAGE_SET_PHASE);
+    command.bulk_update = true;
     const uint8_t requested[] = {10u, 20u, 30u, 40u};
     memcpy(command.phase_states, requested, sizeof(requested));
 
@@ -114,6 +116,7 @@ static void test_bulk_vga_plan(void)
 {
     const can_control_state_t current = initial_state();
     can_command_t command = command_of(CAN_MESSAGE_SET_VGA);
+    command.bulk_update = true;
     const uint8_t requested[] = {0u, 8u, 12u, 23u};
     memcpy(command.attenuation_db, requested, sizeof(requested));
 
@@ -140,6 +143,7 @@ static void test_bulk_combined_plan_uses_safe_transition_order(void)
 {
     const can_control_state_t current = initial_state();
     can_command_t command = command_of(CAN_MESSAGE_SET_COMBINED);
+    command.bulk_update = true;
     const uint8_t phases[] = {64u, 65u, 66u, 67u};
     const uint8_t attenuations[] = {12u, 23u, 0u, 8u};
     memcpy(command.phase_states, phases, sizeof(phases));
@@ -179,6 +183,7 @@ static void test_bulk_combined_all_max_uses_eight_operations(void)
 {
     const can_control_state_t current = initial_state();
     can_command_t command = command_of(CAN_MESSAGE_SET_COMBINED);
+    command.bulk_update = true;
     const uint8_t phases[] = {1u, 2u, 3u, 4u};
     const uint8_t attenuations[] = {23u, 23u, 23u, 23u};
     memcpy(command.phase_states, phases, sizeof(phases));
@@ -190,6 +195,65 @@ static void test_bulk_combined_all_max_uses_eight_operations(void)
     assert(plan.operation_count == 8u);
 }
 
+
+static void test_individual_phase_plan(void)
+{
+    const can_control_state_t current = {
+        .phase_states = {1u, 2u, 3u, 4u},
+        .attenuation_db = {23u, 8u, 23u, 23u},
+    };
+    can_command_t command = command_of(CAN_MESSAGE_SET_PHASE);
+    command.channel = 1u;
+    command.phase_states[1] = 146u;
+
+    can_control_plan_t plan = {0};
+    assert(can_control_plan_command(&command, &current, &plan)
+        == CAN_COMMAND_RESULT_OK);
+    assert(plan.operation_count == 3u);
+    assert_operation(&plan, 0u, CAN_CONTROL_OPERATION_VGA, 1u, 0x5cu);
+    assert_operation(
+        &plan, 1u, CAN_CONTROL_OPERATION_PHASE, 1u, phase_command(1u, 146u));
+    assert_operation(&plan, 2u, CAN_CONTROL_OPERATION_VGA, 1u, 0x20u);
+    assert(plan.resulting_state.phase_states[1] == 146u);
+    assert(plan.resulting_state.phase_states[0] == current.phase_states[0]);
+}
+
+static void test_individual_vga_plan(void)
+{
+    const can_control_state_t current = initial_state();
+    can_command_t command = command_of(CAN_MESSAGE_SET_VGA);
+    command.channel = 2u;
+    command.attenuation_db[2] = 12u;
+
+    can_control_plan_t plan = {0};
+    assert(can_control_plan_command(&command, &current, &plan)
+        == CAN_COMMAND_RESULT_OK);
+    assert(plan.operation_count == 1u);
+    assert_operation(&plan, 0u, CAN_CONTROL_OPERATION_VGA, 2u, 0x30u);
+    assert(plan.resulting_state.attenuation_db[2] == 12u);
+    assert(plan.resulting_state.attenuation_db[1] == current.attenuation_db[1]);
+}
+
+static void test_individual_combined_plan(void)
+{
+    const can_control_state_t current = initial_state();
+    can_command_t command = command_of(CAN_MESSAGE_SET_COMBINED);
+    command.channel = 3u;
+    command.phase_states[3] = 64u;
+    command.attenuation_db[3] = 8u;
+
+    can_control_plan_t plan = {0};
+    assert(can_control_plan_command(&command, &current, &plan)
+        == CAN_COMMAND_RESULT_OK);
+    assert(plan.operation_count == 3u);
+    assert_operation(&plan, 0u, CAN_CONTROL_OPERATION_VGA, 3u, 0x5cu);
+    assert_operation(
+        &plan, 1u, CAN_CONTROL_OPERATION_PHASE, 3u, phase_command(3u, 64u));
+    assert_operation(&plan, 2u, CAN_CONTROL_OPERATION_VGA, 3u, 0x20u);
+    assert(plan.resulting_state.phase_states[3] == 64u);
+    assert(plan.resulting_state.attenuation_db[3] == 8u);
+}
+
 static void test_safe_plan_targets_one_channel(void)
 {
     const can_control_state_t current = {
@@ -197,7 +261,7 @@ static void test_safe_plan_targets_one_channel(void)
         .attenuation_db = {0u, 1u, 2u, 3u},
     };
     can_command_t command = command_of(CAN_MESSAGE_ENTER_SAFE);
-    command.safe_channel = 2u;
+    command.channel = 2u;
 
     can_control_plan_t plan = {0};
     assert(can_control_plan_command(&command, &current, &plan)
@@ -235,7 +299,7 @@ static void test_invalid_arguments_and_channel(void)
     const can_control_state_t current = initial_state();
     can_control_plan_t plan = {0};
     can_command_t command = command_of(CAN_MESSAGE_ENTER_SAFE);
-    command.safe_channel = CAN_RF_CHANNEL_COUNT;
+    command.channel = CAN_RF_CHANNEL_COUNT;
 
     assert(can_control_plan_command(&command, &current, &plan)
         == CAN_COMMAND_RESULT_INVALID_PAYLOAD);
@@ -258,6 +322,9 @@ int main(void)
     test_bulk_vga_plan();
     test_bulk_combined_plan_uses_safe_transition_order();
     test_bulk_combined_all_max_uses_eight_operations();
+    test_individual_phase_plan();
+    test_individual_vga_plan();
+    test_individual_combined_plan();
     test_safe_plan_targets_one_channel();
     test_ping_has_no_hardware_actions();
     test_invalid_arguments_and_channel();

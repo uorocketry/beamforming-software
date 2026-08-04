@@ -11,7 +11,7 @@
  * the major protocol version in byte 0.
  */
 #define CAN_PROTOCOL_VERSION_MAJOR 2u
-#define CAN_PROTOCOL_VERSION_MINOR 0u
+#define CAN_PROTOCOL_VERSION_MINOR 1u
 #define CAN_PROTOCOL_VERSION_PATCH 0u
 #define CAN_PROTOCOL_VERSION CAN_PROTOCOL_VERSION_MAJOR
 
@@ -58,21 +58,16 @@
 #define CAN_VGA_ATTENUATION_MAX_DB 23u
 
 /*
- * Number of semantically used payload bytes for each command.
- *
- * DLC rules:
- *
- * - DLC must be at least the corresponding USED_LENGTH.
- * - DLC may be larger, up to 8.
- * - Every transmitted byte after USED_LENGTH must be zero.
- *
- * This keeps existing short-DLC protocol 1.0 messages valid while allowing
- * fixed-width, zero-padded frames.
+ * RF commands use exact DLCs: individual or bulk. Do not zero-pad them.
+ * ENTER_SAFE and PING retain semantic-length plus zero-padding validation.
  */
 #define CAN_ENTER_SAFE_USED_LENGTH 1u
-#define CAN_SET_COMBINED_USED_LENGTH 8u
-#define CAN_SET_PHASE_USED_LENGTH 4u
-#define CAN_SET_VGA_USED_LENGTH 4u
+#define CAN_SET_PHASE_INDIVIDUAL_LENGTH 2u
+#define CAN_SET_PHASE_BULK_LENGTH 4u
+#define CAN_SET_VGA_INDIVIDUAL_LENGTH 2u
+#define CAN_SET_VGA_BULK_LENGTH 4u
+#define CAN_SET_COMBINED_INDIVIDUAL_LENGTH 3u
+#define CAN_SET_COMBINED_BULK_LENGTH 8u
 #define CAN_PING_USED_LENGTH 0u
 
 #define CAN_ACK_LENGTH 2u
@@ -140,7 +135,11 @@ typedef enum can_protocol_feature {
      * SET_PHASE, SET_VGA and SET_COMBINED carry all four RF channels.
      */
     CAN_PROTOCOL_FEATURE_BULK_RF_UPDATE =
-        1u << 8
+        1u << 8,
+
+    /* RF commands support both one-channel and four-channel payloads. */
+    CAN_PROTOCOL_FEATURE_INDIVIDUAL_RF_UPDATE =
+        1u << 9
 } can_protocol_feature_t;
 
 #define CAN_PROTOCOL_FEATURE_FLAGS                         \
@@ -152,7 +151,8 @@ typedef enum can_protocol_feature {
                 CAN_PROTOCOL_FEATURE_SAFE_TRANSITIONS |          \
                 CAN_PROTOCOL_FEATURE_TERMINAL_RESPONSE |         \
                 CAN_PROTOCOL_FEATURE_STATUS_SUBTYPES |            \
-                CAN_PROTOCOL_FEATURE_BULK_RF_UPDATE))
+                CAN_PROTOCOL_FEATURE_BULK_RF_UPDATE |              \
+                CAN_PROTOCOL_FEATURE_INDIVIDUAL_RF_UPDATE))
 
 typedef enum can_message_type {
     CAN_MESSAGE_ENTER_SAFE = 0,
@@ -224,8 +224,9 @@ typedef struct can_command {
     uint8_t phase_states[CAN_RF_CHANNEL_COUNT];
     uint8_t attenuation_db[CAN_RF_CHANNEL_COUNT];
 
-    /* ENTER_SAFE remains a one-channel command and uses a zero-based index. */
-    uint8_t safe_channel;
+    /* Individual RF commands and ENTER_SAFE use this zero-based channel. */
+    uint8_t channel;
+    bool bulk_update;
 } can_command_t;
 
 typedef struct can_status_payload {

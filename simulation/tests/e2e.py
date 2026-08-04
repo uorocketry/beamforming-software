@@ -83,7 +83,7 @@ def main() -> int:
         legacy, info = client.discover(1)
         assert legacy[0] == P.PROTOCOL_MAJOR and legacy[1] == 1
         assert info is not None
-        assert (info.major, info.minor, info.patch) == (2, 0, 0)
+        assert (info.major, info.minor, info.patch) == (2, 1, 0)
         assert info.node_id == 1
         assert info.feature_flags == P.FEATURE_FLAGS
 
@@ -94,6 +94,11 @@ def main() -> int:
             [64, 65, 66, 67],
             [12, 13, 14, 15],
         ) == bytes([P.SET_COMBINED, P.RES_OK])
+        assert client.set_phase_channel(1, 2, 146) == bytes([P.SET_PHASE, P.RES_OK])
+        assert client.set_vga_channel(1, 1, 7) == bytes([P.SET_VGA, P.RES_OK])
+        assert client.set_combined_channel(1, 0, 32, 6) == bytes(
+            [P.SET_COMBINED, P.RES_OK]
+        )
         assert client.enter_safe(1, 1) == bytes([P.ENTER_SAFE, P.RES_OK])
     finally:
         transport.close()
@@ -104,7 +109,7 @@ def main() -> int:
     assert snapshot["configuration"]["target_nodes"] == [1]
     assert snapshot["nodes"][0]["node_id"] == 1
     assert snapshot["nodes"][0]["health"] == "healthy"
-    assert snapshot["nodes"][0]["protocol_version"] == "2.0.0"
+    assert snapshot["nodes"][0]["protocol_version"] == "2.1.0"
 
     text = wait_for_log("SIM_SPI2 offset=0xC value=0x1628")
 
@@ -129,7 +134,12 @@ def main() -> int:
             0x30,
             0x34,
             0x38,
-            0x3C,  # SET_COMBINED stage 3: 12, 13, 14, 15 dB
+            0x3C,  # bulk combined stage 3: 12, 13, 14, 15 dB
+            0x5C,
+            0x38,  # individual phase: protect and restore channel 3
+            0x1C,  # individual VGA: 7 dB on channel 2
+            0x5C,
+            0x18,  # individual combined: protect then apply 6 dB on channel 1
             0x5C,  # ENTER_SAFE channel 2
         ],
         "VGA SPI writes",
@@ -148,7 +158,9 @@ def main() -> int:
             0x0058,
             0x0F94,
             0x085C,
-            0x1852,  # SET_COMBINED: states 64, 65, 66, 67
+            0x1852,  # bulk combined: states 64, 65, 66, 67
+            0x162C,  # individual phase: state 146, address 3
+            0x0088,  # individual combined: state 32, address 1
             0x0004,  # ENTER_SAFE: state 0, address 2
         ],
         "phase-shifter SPI writes",
@@ -164,8 +176,8 @@ def main() -> int:
 
     print("BeamControl virtual end-to-end test passed")
     print("  real Python controller and FastAPI dashboard: healthy")
-    print("  real STM32F072 ELF in Renode: protocol v2.0 node 1")
-    print("  SocketCAN round trips: discover, bulk phase, bulk VGA, combined, safe")
+    print("  real STM32F072 ELF in Renode: protocol v2.1 node 1")
+    print("  SocketCAN round trips: discovery, individual/bulk RF updates, safe")
     print("  SPI/GPIO transaction sequence: verified")
     return 0
 

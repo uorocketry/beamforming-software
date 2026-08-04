@@ -1,4 +1,4 @@
-"""A fake BeamControl node that listens on a CAN bus and replies per protocol v2.0.
+"""A fake BeamControl node that listens on a CAN bus and replies per protocol v2.1.
 
 Used for virtual-bus integration tests (python-can `virtual` interface). It
 implements just enough of the wire protocol to exercise the client: SET_*
@@ -67,16 +67,18 @@ class FakeBeamControlNode:
                     )
             elif f["type"] in (P.SET_PHASE, P.SET_VGA, P.SET_COMBINED, P.ENTER_SAFE):
                 if f["type"] == P.SET_PHASE:
-                    ok = len(data) == P.RF_CHANNEL_COUNT
+                    ok = len(data) == 4 or (len(data) == 2 and data[1] <= P.PHASE_ADDR_MAX)
                 elif f["type"] == P.SET_VGA:
-                    ok = len(data) == P.RF_CHANNEL_COUNT and all(
-                        value <= P.ATTEN_DB_MAX for value in data
+                    ok = (len(data) == 4 and all(value <= P.ATTEN_DB_MAX for value in data)) or (
+                        len(data) == 2 and data[0] <= P.ATTEN_DB_MAX and data[1] <= P.PHASE_ADDR_MAX
                     )
                 elif f["type"] == P.SET_COMBINED:
-                    ok = len(data) == 2 * P.RF_CHANNEL_COUNT and all(
-                        value <= P.ATTEN_DB_MAX for value in data[P.RF_CHANNEL_COUNT :]
+                    ok = (
+                        len(data) == 8 and all(value <= P.ATTEN_DB_MAX for value in data[4:])
+                    ) or (
+                        len(data) == 3 and data[1] <= P.PHASE_ADDR_MAX and data[2] <= P.ATTEN_DB_MAX
                     )
-                else:  # ENTER_SAFE
+                else:
                     ok = len(data) == 1 and data[0] <= P.PHASE_ADDR_MAX
                 if ok:
                     self._reply(P.ACK, f["source"], f["sequence"], bytes([f["type"], P.RES_OK]))

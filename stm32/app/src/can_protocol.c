@@ -55,8 +55,8 @@ static can_decode_result_t can_protocol_decode_enter_safe(
         return result;
     }
 
-    command->safe_channel = frame->data[0];
-    if (command->safe_channel > CAN_RF_CHANNEL_MAX) {
+    command->channel = frame->data[0];
+    if (command->channel > CAN_RF_CHANNEL_MAX) {
         return CAN_DECODE_INVALID_PAYLOAD;
     }
 
@@ -67,16 +67,23 @@ static can_decode_result_t can_protocol_decode_set_combined(
     const can_frame_t *frame,
     can_command_t *command)
 {
-    const can_decode_result_t result =
-        can_protocol_validate_used_length(
-            frame,
-            CAN_SET_COMBINED_USED_LENGTH);
+    if (frame->length == CAN_SET_COMBINED_INDIVIDUAL_LENGTH) {
+        command->channel = frame->data[1];
+        if (command->channel > CAN_RF_CHANNEL_MAX
+            || frame->data[2] > CAN_VGA_ATTENUATION_MAX_DB) {
+            return CAN_DECODE_INVALID_PAYLOAD;
+        }
 
-    if (result != CAN_DECODE_OK) {
-        return result;
+        command->phase_states[command->channel] = frame->data[0];
+        command->attenuation_db[command->channel] = frame->data[2];
+        command->bulk_update = false;
+        return CAN_DECODE_OK;
     }
 
-    /* Bytes 0..3 are phase indexes; bytes 4..7 are VGA attenuations. */
+    if (frame->length != CAN_SET_COMBINED_BULK_LENGTH) {
+        return CAN_DECODE_INVALID_LENGTH;
+    }
+
     memcpy(command->phase_states, frame->data, CAN_RF_CHANNEL_COUNT);
     memcpy(
         command->attenuation_db,
@@ -89,6 +96,7 @@ static can_decode_result_t can_protocol_decode_set_combined(
         }
     }
 
+    command->bulk_update = true;
     return CAN_DECODE_OK;
 }
 
@@ -96,17 +104,23 @@ static can_decode_result_t can_protocol_decode_set_phase(
     const can_frame_t *frame,
     can_command_t *command)
 {
-    const can_decode_result_t result =
-        can_protocol_validate_used_length(
-            frame,
-            CAN_SET_PHASE_USED_LENGTH);
+    if (frame->length == CAN_SET_PHASE_INDIVIDUAL_LENGTH) {
+        command->channel = frame->data[1];
+        if (command->channel > CAN_RF_CHANNEL_MAX) {
+            return CAN_DECODE_INVALID_PAYLOAD;
+        }
 
-    if (result != CAN_DECODE_OK) {
-        return result;
+        command->phase_states[command->channel] = frame->data[0];
+        command->bulk_update = false;
+        return CAN_DECODE_OK;
     }
 
-    /* The four bytes are phase-enum indexes for channels 1 through 4. */
+    if (frame->length != CAN_SET_PHASE_BULK_LENGTH) {
+        return CAN_DECODE_INVALID_LENGTH;
+    }
+
     memcpy(command->phase_states, frame->data, CAN_RF_CHANNEL_COUNT);
+    command->bulk_update = true;
     return CAN_DECODE_OK;
 }
 
@@ -114,16 +128,22 @@ static can_decode_result_t can_protocol_decode_set_vga(
     const can_frame_t *frame,
     can_command_t *command)
 {
-    const can_decode_result_t result =
-        can_protocol_validate_used_length(
-            frame,
-            CAN_SET_VGA_USED_LENGTH);
+    if (frame->length == CAN_SET_VGA_INDIVIDUAL_LENGTH) {
+        command->channel = frame->data[1];
+        if (command->channel > CAN_RF_CHANNEL_MAX
+            || frame->data[0] > CAN_VGA_ATTENUATION_MAX_DB) {
+            return CAN_DECODE_INVALID_PAYLOAD;
+        }
 
-    if (result != CAN_DECODE_OK) {
-        return result;
+        command->attenuation_db[command->channel] = frame->data[0];
+        command->bulk_update = false;
+        return CAN_DECODE_OK;
     }
 
-    /* The four bytes are integer-dB attenuation values for VGA channels 1..4. */
+    if (frame->length != CAN_SET_VGA_BULK_LENGTH) {
+        return CAN_DECODE_INVALID_LENGTH;
+    }
+
     memcpy(command->attenuation_db, frame->data, CAN_RF_CHANNEL_COUNT);
     for (uint8_t channel = 0u; channel < CAN_RF_CHANNEL_COUNT; ++channel) {
         if (command->attenuation_db[channel] > CAN_VGA_ATTENUATION_MAX_DB) {
@@ -131,6 +151,7 @@ static can_decode_result_t can_protocol_decode_set_vga(
         }
     }
 
+    command->bulk_update = true;
     return CAN_DECODE_OK;
 }
 
@@ -274,7 +295,7 @@ can_decode_result_t can_protocol_decode_command(
 
     /*
      * STATUS, ACK and ERROR are receiver-to-controller message types and are
-     * not valid commands received by an BeamControl node.
+     * not valid commands received by a BeamControl node.
      */
     if (type > CAN_MESSAGE_PING) {
         return CAN_DECODE_UNSUPPORTED_TYPE;

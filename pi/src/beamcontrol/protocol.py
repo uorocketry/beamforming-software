@@ -1,4 +1,4 @@
-"""BeamControl CAN protocol v2.0 constants and helpers (29-bit extended @ 500 kbit/s).
+"""BeamControl CAN protocol v2.1 constants and helpers (29-bit extended @ 500 kbit/s).
 
 See docs/can-protocol.md for the full spec.
 """
@@ -8,7 +8,7 @@ from __future__ import annotations
 from collections.abc import Iterable, Sequence
 
 PROTOCOL_MAJOR = 2
-PROTOCOL_MINOR = 0
+PROTOCOL_MINOR = 1
 PROTOCOL_PATCH = 0
 
 # --- Identifier bit fields (29-bit extended) ---
@@ -56,6 +56,7 @@ FEATURE_SAFE_TRANSITIONS = 1 << 5
 FEATURE_TERMINAL_RESPONSE = 1 << 6
 FEATURE_STATUS_SUBTYPES = 1 << 7
 FEATURE_BULK_RF_UPDATE = 1 << 8
+FEATURE_INDIVIDUAL_RF_UPDATE = 1 << 9
 FEATURE_FLAGS = (
     FEATURE_STRICT_CHANNELS
     | FEATURE_ENTER_SAFE_ONLY_BROADCAST
@@ -66,6 +67,7 @@ FEATURE_FLAGS = (
     | FEATURE_TERMINAL_RESPONSE
     | FEATURE_STATUS_SUBTYPES
     | FEATURE_BULK_RF_UPDATE
+    | FEATURE_INDIVIDUAL_RF_UPDATE
 )
 
 # --- Status subtypes / health flags ---
@@ -104,7 +106,11 @@ def parse_id(can_id: int) -> dict:
 
 
 def validate_channel(channel: int) -> None:
-    if not (0 <= channel <= PHASE_ADDR_MAX):
+    if (
+        not isinstance(channel, int)
+        or isinstance(channel, bool)
+        or not (0 <= channel <= PHASE_ADDR_MAX)
+    ):
         raise ValueError(f"channel must be 0..{PHASE_ADDR_MAX}")
 
 
@@ -127,3 +133,17 @@ def validate_phase_states(phase_states: Sequence[int]) -> bytes:
 
 def validate_attenuations(attenuation_db: Sequence[int]) -> bytes:
     return _validated_four("attenuation_db", attenuation_db, ATTEN_DB_MAX)
+
+
+def _validated_value(name: str, value: int, maximum: int) -> int:
+    if not isinstance(value, int) or isinstance(value, bool) or not (0 <= value <= maximum):
+        raise ValueError(f"{name} must be 0..{maximum}")
+    return value
+
+
+def validate_phase_state(phase_state: int) -> int:
+    return _validated_value("phase_state", phase_state, PHASE_STATE_MAX)
+
+
+def validate_attenuation(attenuation_db: int) -> int:
+    return _validated_value("attenuation_db", attenuation_db, ATTEN_DB_MAX)

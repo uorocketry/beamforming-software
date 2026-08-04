@@ -1,4 +1,4 @@
-"""Contract test: Python and C must agree with protocol/v2.0-vectors.toml."""
+"""Contract test: Python and C must agree with protocol/v2.1-vectors.toml."""
 
 from __future__ import annotations
 
@@ -9,7 +9,7 @@ import pytest
 
 from beamcontrol import protocol as P
 
-VECTORS = Path(__file__).resolve().parents[3] / "protocol" / "v2.0-vectors.toml"
+VECTORS = Path(__file__).resolve().parents[3] / "protocol" / "v2.1-vectors.toml"
 DATA = tomllib.loads(VECTORS.read_text(encoding="utf-8"))
 
 
@@ -30,15 +30,34 @@ def test_id_vector_decodes(v):
 
 def _validate_command(msg_type: int, payload: list[int]) -> None:
     if msg_type == P.SET_PHASE:
-        P.validate_phase_states(payload)
+        if len(payload) == 2:
+            P.validate_phase_state(payload[0])
+            P.validate_channel(payload[1])
+        elif len(payload) == 4:
+            P.validate_phase_states(payload)
+        else:
+            raise ValueError("SET_PHASE requires DLC 2 or 4")
     elif msg_type == P.SET_VGA:
-        P.validate_attenuations(payload)
+        if len(payload) == 2:
+            P.validate_attenuation(payload[0])
+            P.validate_channel(payload[1])
+        elif len(payload) == 4:
+            P.validate_attenuations(payload)
+        else:
+            raise ValueError("SET_VGA requires DLC 2 or 4")
     elif msg_type == P.SET_COMBINED:
-        P.validate_phase_states(payload[: P.RF_CHANNEL_COUNT])
-        P.validate_attenuations(payload[P.RF_CHANNEL_COUNT :])
+        if len(payload) == 3:
+            P.validate_phase_state(payload[0])
+            P.validate_channel(payload[1])
+            P.validate_attenuation(payload[2])
+        elif len(payload) == 8:
+            P.validate_phase_states(payload[:4])
+            P.validate_attenuations(payload[4:])
+        else:
+            raise ValueError("SET_COMBINED requires DLC 3 or 8")
     elif msg_type == P.ENTER_SAFE:
         if len(payload) != 1:
-            raise ValueError("ENTER_SAFE requires one channel")
+            raise ValueError("ENTER_SAFE requires DLC 1")
         P.validate_channel(payload[0])
 
 
@@ -47,11 +66,6 @@ def test_command_validation(v):
     payload = list(v["data"])
     if v["valid"]:
         _validate_command(v["type"], payload)
-        return
-
-    # Reserved-byte rejection is a decoder rule; Python value helpers do not
-    # inspect bytes beyond the semantic payload.
-    if v["result"] == P.RES_RESERVED_BYTES:
         return
 
     with pytest.raises(ValueError):

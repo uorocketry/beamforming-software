@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Bring up a SocketCAN interface for BeamControl protocol v2.0."""
+"""Bring up a SocketCAN interface for BeamControl protocol v2.1."""
 
 from __future__ import annotations
 

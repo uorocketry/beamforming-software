@@ -119,6 +119,33 @@ def test_bulk_payload_validation():
         client.set_combined(3, PHASES, [0, 1, 2])
 
 
+@pytest.mark.parametrize(
+    ("method", "args", "command_type", "payload"),
+    [
+        ("set_phase_channel", (2, 128), P.SET_PHASE, bytes([128, 2])),
+        ("set_vga_channel", (1, 8), P.SET_VGA, bytes([8, 1])),
+        ("set_combined_channel", (3, 64, 12), P.SET_COMBINED, bytes([64, 3, 12])),
+    ],
+)
+def test_individual_methods_send_exact_payload(method, args, command_type, payload):
+    client, _, transport = _make([_ack(3, 1, command_type)], retries=0)
+    result = getattr(client, method)(3, *args)
+    assert result == bytes([command_type, P.RES_OK])
+    assert bytes(transport.sent[0].data) == payload
+
+
+def test_individual_method_validation():
+    client, _, _ = _make([], retries=0)
+    with pytest.raises(ValueError):
+        client.set_phase_channel(3, 4, 128)
+    with pytest.raises(ValueError):
+        client.set_phase_channel(3, 2, 256)
+    with pytest.raises(ValueError):
+        client.set_vga_channel(3, 2, 24)
+    with pytest.raises(ValueError):
+        client.set_combined_channel(3, 2, 64, 24)
+
+
 def test_discovery_legacy_only():
     legacy = _Reply(
         P.build_id(P.STATUS, 0, 3, P.SEQ_CAPABILITIES),
@@ -153,7 +180,7 @@ def test_discovery_with_protocol_info():
     client, _, _ = _make([legacy, info])
     _, pi = client.discover(3)
     assert pi is not None
-    assert pi.major == 2 and pi.minor == 0
+    assert pi.major == 2 and pi.minor == 1
     assert pi.node_id == 3
     assert pi.feature_flags == P.FEATURE_FLAGS
 

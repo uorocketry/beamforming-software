@@ -108,23 +108,35 @@ def command_payload(message_type: MessageType, values: Sequence[int]) -> bytes:
     values = list(values)
 
     if message_type is MessageType.SET_PHASE:
-        if len(values) != CAN_RF_CHANNEL_COUNT or any(
-            not 0 <= value <= 255 for value in values
-        ):
-            raise ValueError("phase requires four state indexes, each 0..255")
+        valid = (len(values) == 4 and all(0 <= value <= 255 for value in values)) or (
+            len(values) == 2
+            and 0 <= values[0] <= 255
+            and 0 <= values[1] <= CAN_RF_CHANNEL_MAX
+        )
+        if not valid:
+            raise ValueError("phase requires STATE CHANNEL or four states")
     elif message_type is MessageType.SET_VGA:
-        if len(values) != CAN_RF_CHANNEL_COUNT or any(
-            not 0 <= value <= 23 for value in values
-        ):
-            raise ValueError("vga requires four attenuation values, each 0..23")
+        valid = (len(values) == 4 and all(0 <= value <= 23 for value in values)) or (
+            len(values) == 2
+            and 0 <= values[0] <= 23
+            and 0 <= values[1] <= CAN_RF_CHANNEL_MAX
+        )
+        if not valid:
+            raise ValueError("vga requires ATTENUATION CHANNEL or four attenuations")
     elif message_type is MessageType.SET_COMBINED:
-        if (
-            len(values) != 2 * CAN_RF_CHANNEL_COUNT
-            or any(not 0 <= value <= 255 for value in values[:CAN_RF_CHANNEL_COUNT])
-            or any(not 0 <= value <= 23 for value in values[CAN_RF_CHANNEL_COUNT:])
-        ):
+        valid = (
+            len(values) == 8
+            and all(0 <= value <= 255 for value in values[:4])
+            and all(0 <= value <= 23 for value in values[4:])
+        ) or (
+            len(values) == 3
+            and 0 <= values[0] <= 255
+            and 0 <= values[1] <= CAN_RF_CHANNEL_MAX
+            and 0 <= values[2] <= 23
+        )
+        if not valid:
             raise ValueError(
-                "combined requires four state indexes followed by four attenuation values"
+                "combined requires STATE CHANNEL ATTENUATION or four states and four attenuations"
             )
     elif message_type is MessageType.ENTER_SAFE:
         if len(values) != 1 or not 0 <= values[0] <= CAN_RF_CHANNEL_MAX:
@@ -264,34 +276,17 @@ def parser() -> argparse.ArgumentParser:
     ping = subparsers.add_parser("ping", help="request node status")
     ping.add_argument("node", type=int)
 
-    phase = subparsers.add_parser("phase", help="set all four phase-shifter states")
+    phase = subparsers.add_parser("phase", help="set one or four phase states")
     phase.add_argument("node", type=int)
-    phase.add_argument(
-        "states", type=int, nargs=4, metavar=("PS1", "PS2", "PS3", "PS4")
-    )
+    phase.add_argument("values", type=int, nargs="+", metavar="VALUE")
 
-    vga = subparsers.add_parser("vga", help="set all four VGA attenuations")
+    vga = subparsers.add_parser("vga", help="set one or four VGA attenuations")
     vga.add_argument("node", type=int)
-    vga.add_argument(
-        "attenuations_db",
-        type=int,
-        nargs=4,
-        metavar=("VGA1", "VGA2", "VGA3", "VGA4"),
-    )
+    vga.add_argument("values", type=int, nargs="+", metavar="VALUE")
 
-    combined = subparsers.add_parser(
-        "combined", help="set all four phases and attenuations"
-    )
+    combined = subparsers.add_parser("combined", help="set phase and attenuation")
     combined.add_argument("node", type=int)
-    combined.add_argument(
-        "states", type=int, nargs=4, metavar=("PS1", "PS2", "PS3", "PS4")
-    )
-    combined.add_argument(
-        "attenuations_db",
-        type=int,
-        nargs=4,
-        metavar=("VGA1", "VGA2", "VGA3", "VGA4"),
-    )
+    combined.add_argument("values", type=int, nargs="+", metavar="VALUE")
 
     safe = subparsers.add_parser(
         "safe", help="set one channel to maximum attenuation and zero phase"
@@ -312,15 +307,9 @@ def main(argv: Sequence[str] | None = None) -> int:
 
     action_map = {
         "ping": (MessageType.PING, []),
-        "phase": (MessageType.SET_PHASE, getattr(args, "states", [])),
-        "vga": (MessageType.SET_VGA, getattr(args, "attenuations_db", [])),
-        "combined": (
-            MessageType.SET_COMBINED,
-            [
-                *getattr(args, "states", []),
-                *getattr(args, "attenuations_db", []),
-            ],
-        ),
+        "phase": (MessageType.SET_PHASE, getattr(args, "values", [])),
+        "vga": (MessageType.SET_VGA, getattr(args, "values", [])),
+        "combined": (MessageType.SET_COMBINED, getattr(args, "values", [])),
         "safe": (MessageType.ENTER_SAFE, [getattr(args, "channel", 0)]),
     }
     message_type, values = action_map[args.action]

@@ -76,8 +76,20 @@ class CanSmokeToolTests(unittest.TestCase):
 
     def test_command_payload_validation(self) -> None:
         self.assertEqual(
+            MODULE.command_payload(MODULE.MessageType.SET_PHASE, [128, 2]),
+            bytes([128, 2]),
+        )
+        self.assertEqual(
+            MODULE.command_payload(MODULE.MessageType.SET_VGA, [8, 1]),
+            bytes([8, 1]),
+        )
+        self.assertEqual(
             MODULE.command_payload(MODULE.MessageType.SET_VGA, [0, 8, 12, 23]),
             bytes([0, 8, 12, 23]),
+        )
+        self.assertEqual(
+            MODULE.command_payload(MODULE.MessageType.SET_COMBINED, [64, 3, 12]),
+            bytes([64, 3, 12]),
         )
         self.assertEqual(
             MODULE.command_payload(

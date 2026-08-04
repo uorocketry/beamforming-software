@@ -1,207 +1,145 @@
-# BeamControl CAN protocol v2.0
+# BeamControl CAN protocol v2.1
 
-This document defines the implemented wire contract shared by the Raspberry Pi controller,
-the STM32 receiver firmware, and the generated Python/C protocol-vector tests.
+Implemented by the Pi client, STM32 firmware, and shared vectors.
 
-Protocol 2.0 is a breaking payload revision. The 29-bit identifier layout and numeric message
-types are unchanged, but the three RF configuration commands now carry all four receiver
-channels in one Classical CAN frame.
-
-## Bus profile
+## Bus
 
 | Property | Value |
 |:--|:--|
-| Format | Classical CAN 2.0B extended data frames |
-| Identifier | 29-bit |
-| Bitrate | 500,000 bit/s |
-| Sample point | 87.5% |
-| SJW | 1 TQ |
-| Controller node | Raspberry Pi, address `0` |
-| Receiver nodes | STM32 boards, addresses `1..30` |
-| Broadcast destination | `31` |
-| Maximum payload | 8 bytes |
-| Protocol version | 2.0.0 |
+| Frame | Classical CAN 2.0B extended data |
+| Bitrate | 500 kbit/s |
+| Sample point / SJW | 87.5% / 1 TQ |
+| Controller | Node `0` |
+| Receivers | Nodes `1..30` |
+| Broadcast | `31` |
+| Payload | 0..8 bytes |
 
-## Terminology and channel order
-
-A **receiver node** is one BeamControl board with one STM32. Each receiver has four RF
-channels. Every bulk payload uses the same fixed order:
+## Identifier
 
 ```text
-array index / CAN byte position:  0   1   2   3
-physical channel name:           1   2   3   4
-PE44820 serial address:           1   2   3   4
-```
-
-The software arrays are zero-based, but the PE44820 addresses transmitted by the STM32 are
-one-based. The phase address is derived from the array index and is not sent in the payload.
-
-## Identifier layout
-
-```text
-Bits 28:26  TYPE        3 bits
-Bits 25:21  DEST        5 bits
-Bits 20:16  SOURCE      5 bits
-Bits 15:0   SEQUENCE    16 bits
+28:26 TYPE
+25:21 DEST
+20:16 SOURCE
+15:0  SEQUENCE
 ```
 
 ```text
-identifier = (type << 26) | (destination << 21) | (source << 16) | sequence
+id = (type << 26) | (dest << 21) | (source << 16) | sequence
 ```
 
-Responses swap source and destination and retain the request sequence. `ENTER_SAFE` has the
-lowest numeric type and therefore the highest arbitration priority used by this protocol.
+Responses swap source/destination and preserve sequence. `ENTER_SAFE` has the highest command priority because its type is `0`.
 
-## Message types and payloads
+## Channels
 
-| Type | Message | Direction | Payload |
+Software channels are `0..3`. Bulk array indexes map to PE44820 addresses `1..4`.
+
+## Messages
+
+| Type | Name | Direction | Exact payload |
 |:--|:--|:--|:--|
-| `0` | `ENTER_SAFE` | Controller → receiver | `[channel]` |
-| `1` | `SET_COMBINED` | Controller → receiver | `[PS1, PS2, PS3, PS4, VGA1, VGA2, VGA3, VGA4]` |
-| `2` | `SET_PHASE` | Controller → receiver | `[PS1, PS2, PS3, PS4]` |
-| `3` | `SET_VGA` | Controller → receiver | `[VGA1, VGA2, VGA3, VGA4]` |
-| `4` | `PING` | Controller → receiver | empty |
-| `5` | `STATUS` | Receiver → controller | 8-byte status |
-| `6` | `ACK` | Receiver → controller | `[command_type, result]` |
-| `7` | `ERROR` | Receiver → controller | `[command_type, result]` |
+| `0` | `ENTER_SAFE` | Controller -> receiver | `[channel]` |
+| `1` | `SET_COMBINED` | Controller -> receiver | `[state, channel, atten]` or `[PS1..PS4, VGA1..VGA4]` |
+| `2` | `SET_PHASE` | Controller -> receiver | `[state, channel]` or `[PS1, PS2, PS3, PS4]` |
+| `3` | `SET_VGA` | Controller -> receiver | `[atten, channel]` or `[VGA1, VGA2, VGA3, VGA4]` |
+| `4` | `PING` | Controller -> receiver | empty |
+| `5` | `STATUS` | Receiver -> controller | 8 bytes |
+| `6` | `ACK` | Receiver -> controller | `[command_type, result]` |
+| `7` | `ERROR` | Receiver -> controller | `[command_type, result]` |
 
-Field ranges are:
+Ranges:
 
-- `channel`: `0..3`, used only by `ENTER_SAFE`;
-- `PS1..PS4`: `0..255`, each interpreted as an index into the calibrated 2.4 GHz phase enum;
-- `VGA1..VGA4`: `0..23`, each expressed in integer dB.
+- `channel`: `0..3`
+- phase state: `0..255`, index into the calibrated 2.4 GHz enum
+- attenuation: `0..23` dB
 
-### `SET_PHASE`
+RF commands require exact DLCs:
 
-```text
-byte 0  phase-state index for channel 1 / PE44820 address 1
-byte 1  phase-state index for channel 2 / PE44820 address 2
-byte 2  phase-state index for channel 3 / PE44820 address 3
-byte 3  phase-state index for channel 4 / PE44820 address 4
-```
+| Command | Individual | Bulk |
+|:--|--:|--:|
+| `SET_PHASE` | 2 | 4 |
+| `SET_VGA` | 2 | 4 |
+| `SET_COMBINED` | 3 | 8 |
 
-The firmware performs a safe three-stage transition. Channels below 23 dB are first moved to
-23 dB, all four phase shifters are programmed, and each affected channel's previous
-attenuation is restored.
+RF frames are not padded: DLC 2/3 means individual and DLC 4/8 means bulk. A padded individual frame is therefore a bulk frame. `ENTER_SAFE` uses one semantic byte; `PING` may be zero-padded only with zero bytes.
 
-### `SET_VGA`
+## Execution order
 
-```text
-byte 0  attenuation for VGA channel 1
-byte 1  attenuation for VGA channel 2
-byte 2  attenuation for VGA channel 3
-byte 3  attenuation for VGA channel 4
-```
+- Individual `SET_PHASE`: attenuate the selected channel to 23 dB if needed, write phase, restore attenuation.
+- Bulk `SET_PHASE`: attenuate affected channels, write all four phases, restore each prior attenuation.
+- Individual `SET_VGA`: write one attenuation.
+- Bulk `SET_VGA`: validate all four values, then write all four.
+- Individual `SET_COMBINED`: 23 dB, phase, requested attenuation on one channel.
+- Bulk `SET_COMBINED`: 23 dB on all channels, four phases, four requested attenuations.
+- `ENTER_SAFE`: 23 dB and phase state zero on one channel. Broadcast is allowed only for this command.
 
-All four values are validated before any hardware operation is planned.
+The planner validates the complete frame before hardware writes.
 
-### `SET_COMBINED`
+## ACK, retries, replay
 
-```text
-bytes 0..3  phase-state indexes for channels 1..4
-bytes 4..7  attenuation values for VGA channels 1..4
-```
+A unicast state-changing request returns:
 
-The firmware first plans 23 dB for all channels, then plans the four phase writes, then plans
-the requested attenuation values. A requested value of 23 dB is not written twice because
-the first stage already applied it.
+- `ACK` after validation and planned STM32 SPI transfers complete
+- `ERROR` on decode, validation, sequence, or execution failure
 
-### `ENTER_SAFE`
+ACK is not RF-device readback; neither RF interface has MISO connected.
 
-`ENTER_SAFE` intentionally remains a one-channel emergency command. The payload byte is the
-zero-based channel index `0..3`. The STM32 plans 23 dB attenuation and calibrated phase state
-zero for that channel. Broadcast destination `31` is accepted only for `ENTER_SAFE`.
+The client matches source, destination, sequence, and command type. Default timeout: 20 ms. Default retries: two, using identical ID, DLC, and bytes. A final timeout means hardware state is unknown.
 
-## DLC and reserved bytes
+The receiver caches the latest successful unicast state-changing request:
 
-The minimum semantic payload lengths are:
+- identical retry: replay ACK, no RF writes
+- same source/type/sequence with different DLC or data: `SEQUENCE_REUSE`
+- broadcast: no cache, no response
 
-| Message | Used bytes |
-|:--|--:|
-| `ENTER_SAFE` | 1 |
-| `SET_PHASE` | 4 |
-| `SET_VGA` | 4 |
-| `SET_COMBINED` | 8 |
-| `PING` | 0 |
-
-A frame may use a longer DLC only when every byte after the semantic payload is zero.
-`SET_COMBINED` already occupies all eight Classical CAN bytes and cannot be padded further.
-An exact retry must preserve the original identifier, DLC, and payload bytes.
-
-## Responses, retries, and acknowledgement meaning
-
-A unicast state-changing command produces one terminal response:
-
-- `ACK` when STM32-side validation and all planned SPI transfers complete;
-- `ERROR` when decoding, validation, sequencing, or execution rejects the command.
-
-The RF control interfaces on this PCB are transmit-only. There is no MISO/readback path from
-the PE44820 or F0480 devices. Therefore an `ACK` does **not** prove that an RF IC accepted the
-word or that the analog RF state was measured and verified.
-
-The controller matches responses by source, destination, sequence, and command type. It keeps
-at most one outstanding transaction per receiver node. The default host policy uses a 20 ms
-timeout and two exact-message retries. A final timeout means the resulting hardware state is
-unknown.
-
-The receiver caches the most recent successful unicast state-changing request and ACK:
-
-- an identical request replays the cached ACK without repeating RF writes;
-- the same source/type/sequence with different DLC or data returns `SEQUENCE_REUSE`;
-- broadcast commands are not cached and do not receive a response.
-
-## Result codes
+## Results
 
 | Value | Name | Meaning |
 |:--|:--|:--|
-| `0` | `OK` | Command completed on the STM32 side |
-| `1` | `INVALID_LENGTH` | DLC is shorter than the required payload |
-| `2` | `INVALID_PAYLOAD` | A channel or attenuation value is outside its range |
-| `3` | `UNSUPPORTED` | Message type is not a controller command |
+| `0` | `OK` | Completed on STM32 |
+| `1` | `INVALID_LENGTH` | Unsupported DLC |
+| `2` | `INVALID_PAYLOAD` | Invalid channel or attenuation |
+| `3` | `UNSUPPORTED` | Not a controller command |
 | `4` | `HARDWARE` | Hardware operation failed |
-| `5` | `BUSY` | Receiver cannot accept the command |
-| `6` | `RESERVED_BYTES` | A byte after the semantic payload was nonzero |
-| `7` | `SEQUENCE_REUSE` | A sequence was reused with different request bytes |
-| `8` | `BROADCAST_NOT_ALLOWED` | A non-safe command used broadcast destination `31` |
+| `5` | `BUSY` | Cannot accept command |
+| `6` | `RESERVED_BYTES` | Nonzero padding on a command that permits padding |
+| `7` | `SEQUENCE_REUSE` | Same key, different request bytes |
+| `8` | `BROADCAST_NOT_ALLOWED` | Non-safe broadcast |
 
-## Status and capability discovery
+## Status and discovery
 
-A normal `PING` returns the existing eight-byte status payload. Because that legacy payload
-has room for only one phase/VGA snapshot, protocol 2.0 reports channel 1 deterministically:
-
-```text
-byte 0  protocol major (`2`)
-byte 1  receiver node ID
-byte 2  channel-1 phase-state index
-byte 3  channel-1 PE44820 address (`1`)
-byte 4  channel-1 attenuation in dB
-byte 5  health flags
-byte 6  receive-drop count, low byte
-byte 7  invalid-command count, low byte
-```
-
-A `PING` with sequence `0xffff` returns that status frame followed by `PROTOCOL_INFO`:
+Normal `PING` returns a channel-0 snapshot:
 
 ```text
-byte 0  0xf0 subtype
-byte 1  major (`2`)
-byte 2  minor (`0`)
-byte 3  patch (`0`)
-byte 4  feature flags bits 7:0
-byte 5  feature flags bits 15:8
-byte 6  receiver node ID
-byte 7  reserved zero
+0 protocol major (2)
+1 node ID
+2 phase state
+3 PE44820 address (1)
+4 attenuation dB
+5 health flags
+6 RX-drop count low byte
+7 invalid-command count low byte
 ```
 
-Protocol 2.0 adds feature bit 8, `BULK_RF_UPDATE`. The production monitor requires protocol
-major 2 and every advertised required feature bit before reporting a configured node healthy.
+`PING` sequence `0xffff` also returns `PROTOCOL_INFO`:
 
-## Shared contract vectors
+```text
+0 0xf0
+1 major (2)
+2 minor (1)
+3 patch (0)
+4 feature flags low
+5 feature flags high
+6 node ID
+7 zero
+```
 
-Language-neutral vectors live in:
+Required feature bits include `BULK_RF_UPDATE` (bit 8) and `INDIVIDUAL_RF_UPDATE` (bit 9).
 
-- `protocol/v2.0-vectors.toml`
-- `protocol/generated/protocol_vectors.h`
+## Contract vectors
 
-Run `python3 tools/generate-protocol-vectors.py` after changing the TOML file. CI verifies that
-the generated C header and the Python/C implementations remain in agreement.
+- Source: `protocol/v2.1-vectors.toml`
+- Generated C: `protocol/generated/protocol_vectors.h`
+
+```bash
+python3 tools/generate-protocol-vectors.py
+```

@@ -94,22 +94,31 @@ static can_command_result_t append_vga(
 }
 
 /*
- * SET_PHASE changes all four phase shifters while preserving each channel's
+ * SET_PHASE changes one or four phase shifters while preserving each channel's
  * current attenuation.
  *
  * Stage 1: move every active channel to 23 dB before changing phase.
- * Stage 2: program PE44820 addresses 1, 2, 3 and 4 in channel order.
+ * Stage 2: program the selected PE44820 address(es) in channel order.
  * Stage 3: restore the attenuation that each channel had before the command.
  *
  * Channels already at 23 dB do not need an unnecessary stage-1 or stage-3
- * VGA write. The resulting logical state still records all four new phases.
+ * VGA write. The resulting state records each updated phase.
  */
 static can_command_result_t plan_phase_safely(
     const can_command_t *command,
     const can_control_state_t *currentState,
     can_control_plan_t *plan)
 {
-    for (uint8_t channel = 0u; channel < CAN_RF_CHANNEL_COUNT; ++channel) {
+    if (!command->bulk_update && command->channel >= CAN_RF_CHANNEL_COUNT) {
+        return CAN_COMMAND_RESULT_INVALID_PAYLOAD;
+    }
+
+    const uint8_t firstChannel = command->bulk_update ? 0u : command->channel;
+    const uint8_t endChannel = command->bulk_update
+        ? CAN_RF_CHANNEL_COUNT
+        : (uint8_t)(command->channel + 1u);
+
+    for (uint8_t channel = firstChannel; channel < endChannel; ++channel) {
         if (currentState->attenuation_db[channel] != VGA_MAX_ATTENUATION_DB) {
             const can_command_result_t result =
                 append_vga(channel, VGA_MAX_ATTENUATION_DB, plan);
@@ -119,7 +128,7 @@ static can_command_result_t plan_phase_safely(
         }
     }
 
-    for (uint8_t channel = 0u; channel < CAN_RF_CHANNEL_COUNT; ++channel) {
+    for (uint8_t channel = firstChannel; channel < endChannel; ++channel) {
         const can_command_result_t result =
             append_phase(channel, command->phase_states[channel], plan);
         if (result != CAN_COMMAND_RESULT_OK) {
@@ -127,7 +136,7 @@ static can_command_result_t plan_phase_safely(
         }
     }
 
-    for (uint8_t channel = 0u; channel < CAN_RF_CHANNEL_COUNT; ++channel) {
+    for (uint8_t channel = firstChannel; channel < endChannel; ++channel) {
         if (currentState->attenuation_db[channel] != VGA_MAX_ATTENUATION_DB) {
             const can_command_result_t result = append_vga(
                 channel,
@@ -143,20 +152,25 @@ static can_command_result_t plan_phase_safely(
 }
 
 /*
- * SET_COMBINED is the complete eight-byte bulk update:
+ * SET_COMBINED updates one channel (DLC 3) or all channels (DLC 8):
  *
- *   bytes 0..3 = phase-state indexes for channels 0..3
- *   bytes 4..7 = attenuation in dB for channels 0..3
- *
- * All outputs are first moved to maximum attenuation. The four phase words are
- * then transmitted, followed by the requested four attenuation values. A
- * requested 23 dB value is not sent twice because stage 1 already applied it.
+ * Each affected output moves to maximum attenuation, receives its phase word,
+ * then receives the requested attenuation. A requested 23 dB is not sent twice.
  */
 static can_command_result_t plan_combined(
     const can_command_t *command,
     can_control_plan_t *plan)
 {
-    for (uint8_t channel = 0u; channel < CAN_RF_CHANNEL_COUNT; ++channel) {
+    if (!command->bulk_update && command->channel >= CAN_RF_CHANNEL_COUNT) {
+        return CAN_COMMAND_RESULT_INVALID_PAYLOAD;
+    }
+
+    const uint8_t firstChannel = command->bulk_update ? 0u : command->channel;
+    const uint8_t endChannel = command->bulk_update
+        ? CAN_RF_CHANNEL_COUNT
+        : (uint8_t)(command->channel + 1u);
+
+    for (uint8_t channel = firstChannel; channel < endChannel; ++channel) {
         const can_command_result_t result =
             append_vga(channel, VGA_MAX_ATTENUATION_DB, plan);
         if (result != CAN_COMMAND_RESULT_OK) {
@@ -164,7 +178,7 @@ static can_command_result_t plan_combined(
         }
     }
 
-    for (uint8_t channel = 0u; channel < CAN_RF_CHANNEL_COUNT; ++channel) {
+    for (uint8_t channel = firstChannel; channel < endChannel; ++channel) {
         const can_command_result_t result =
             append_phase(channel, command->phase_states[channel], plan);
         if (result != CAN_COMMAND_RESULT_OK) {
@@ -172,7 +186,7 @@ static can_command_result_t plan_combined(
         }
     }
 
-    for (uint8_t channel = 0u; channel < CAN_RF_CHANNEL_COUNT; ++channel) {
+    for (uint8_t channel = firstChannel; channel < endChannel; ++channel) {
         if (command->attenuation_db[channel] != VGA_MAX_ATTENUATION_DB) {
             const can_command_result_t result = append_vga(
                 channel,
@@ -203,9 +217,16 @@ can_command_result_t can_control_plan_command(
     case CAN_MESSAGE_SET_PHASE:
         return plan_phase_safely(command, currentState, plan);
 
-    case CAN_MESSAGE_SET_VGA:
-        /* SET_VGA carries one attenuation byte for each of the four channels. */
-        for (uint8_t channel = 0u; channel < CAN_RF_CHANNEL_COUNT; ++channel) {
+    case CAN_MESSAGE_SET_VGA: {
+        if (!command->bulk_update && command->channel >= CAN_RF_CHANNEL_COUNT) {
+            return CAN_COMMAND_RESULT_INVALID_PAYLOAD;
+        }
+
+        const uint8_t firstChannel = command->bulk_update ? 0u : command->channel;
+        const uint8_t endChannel = command->bulk_update
+            ? CAN_RF_CHANNEL_COUNT
+            : (uint8_t)(command->channel + 1u);
+        for (uint8_t channel = firstChannel; channel < endChannel; ++channel) {
             const can_command_result_t result = append_vga(
                 channel,
                 command->attenuation_db[channel],
@@ -215,6 +236,7 @@ can_command_result_t can_control_plan_command(
             }
         }
         return CAN_COMMAND_RESULT_OK;
+    }
 
     case CAN_MESSAGE_SET_COMBINED:
         return plan_combined(command, plan);
@@ -222,13 +244,13 @@ can_command_result_t can_control_plan_command(
     case CAN_MESSAGE_ENTER_SAFE: {
         /* ENTER_SAFE intentionally remains a one-channel emergency command. */
         can_command_result_t result = append_vga(
-            command->safe_channel,
+            command->channel,
             VGA_MAX_ATTENUATION_DB,
             plan);
         if (result != CAN_COMMAND_RESULT_OK) {
             return result;
         }
-        return append_phase(command->safe_channel, 0u, plan);
+        return append_phase(command->channel, 0u, plan);
     }
 
     case CAN_MESSAGE_PING:

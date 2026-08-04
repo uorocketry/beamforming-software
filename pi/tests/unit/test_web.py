@@ -64,8 +64,8 @@ class FakeMonitor:
                 {
                     "node_id": 1,
                     "health": "healthy",
-                    "protocol_version": "2.0.0",
-                    "feature_flags": "0x00ff",
+                    "protocol_version": "2.1.0",
+                    "feature_flags": "0x03ff",
                     "response_ms": 3.1,
                     "last_seen": "03:00:12",
                     "error": None,

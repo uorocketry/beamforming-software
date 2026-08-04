@@ -1,130 +1,68 @@
 # RF control encoding
 
-This document records the hardware-level serial formats used by the STM32 after a CAN command
-has been decoded. The CAN payload carries logical values; the STM32 converts those values into
-the RF IC command words.
+CAN carries logical values; STM32 builds device serial words.
 
-## PE44820 phase shifter
+## PE44820
 
-`SET_PHASE` carries four 8-bit phase indexes, and `SET_COMBINED` carries the same four indexes
-in bytes `0..3`. Each value is in the range `0..255` and is a logical phase index, not the
-PE44820 `D7:D0` field itself.
-
-Firmware defines the calibrated 2.4 GHz words as `optimizedPhaseState_e` enum constants
-in `stm32/app/include/PhaseStateEnum.h`. Each C2x binary literal shows the complete
-9-bit PE44820 control word directly:
+Each phase value is a `0..255` lookup index. Firmware maps it to a calibrated 2.4 GHz `optimizedPhaseState_e` value from `PhaseStateEnum.h`:
 
 ```text
 bit 8     OPT
 bits 7:0  D7:D0
 ```
 
-The enum was extracted from the `2.4GHz` worksheet of `PE44820_Lookup_3Feb2025.xlsx`. A
-reviewable export is stored in `docs/PE44820_Lookup_2.4GHz.csv`. An indexed enum table converts
-the sequential CAN state number to the nonsequential enum value; directly casting the CAN index
-to `optimizedPhaseState_e` would be incorrect.
+Source data: `docs/PE44820_Lookup_2.4GHz.csv`. Do not cast the index directly to the enum; the mapping is nonsequential and contains intentional duplicates.
 
-In serial mode the PE44820 consumes a 13-bit program word in this logical order:
+PE44820 serial order:
 
 ```text
 D0 D1 D2 D3 D4 D5 D6 D7 OPT A0 A1 A2 A3
 ```
 
-The first nine bits are the looked-up phase word and the last four bits are the unit address.
-Because the STM32 SPI block transmits MSB first, firmware reverses the looked-up eight data bits
-and four address bits before packing. `OPT` comes directly from bit 8 of the calibrated word:
+STM32 SPI sends MSB-first, so firmware reverses the 8-bit phase field and 4-bit address before packing:
 
 ```text
-phase_state_enum = GetOptimizedPhaseState(phase_state)
-
-command = MakePSCommand(phase_state_enum, unit_address)
-
-MakePSCommand:
-    (reverseBits(phase_state_enum & 0xff, 8) << 5)
-  | (((phase_state_enum >> 8) & 1) << 4)
-  | reverseBits(unit_address, 4)
+state = GetOptimizedPhaseState(index)
+command =
+    (reverseBits(state & 0xff, 8) << 5)
+  | (((state >> 8) & 1) << 4)
+  | reverseBits(address, 4)
 ```
 
-For approximately 205.3 degrees, the logical index is `146`. The 2.4 GHz lookup maps that index
-to 9-bit word `0x08D` (`010001101`). At unit address `3`, the resulting 13-bit command is
-`0x162C`. This vector is covered by the native firmware tests.
+Example: index `146` -> word `0b010001101` (`0x08D`); address `3` -> command `0x162C`.
 
-Some logical indices intentionally map to the same hardware word because the calibration table
-selects the closest measured state. The CAN protocol continues to transmit only the one-byte
-logical index; the frequency-specific hardware mapping remains on the STM32.
+CANDev-compatible names retained: `optimizedPhaseState_e`, `GetOptimizedPhaseState()`, `reverseBits()`, `MakePSCommand()`, `pe448spisetup()`.
 
+## F0480
 
-## CANDev-compatible API
-
-The RF helpers intentionally reuse the names and compact function boundaries from the
-STM32Beamforming `CANDev` branch:
-
-- `reverseBits()` reverses a field before serial packing;
-- `GetOptimizedPhaseState()` converts the sequential CAN `stateWordTableIndex` to the
-  nonsequential `optimizedPhaseState_e` value;
-- `MakePSCommand()` forms the 13-bit PE44820 command;
-- `pe448spisetup()` and `f0480spisetup()` retain the chip-specific setup names.
-
-The pure builders remain in `beamforming_protocol.c` so they can be tested on the host without
-linking STM32 peripheral code. The guarded `phase_shifter_write()` and `vga_write()` functions
-remain separate because they add bounded waits, fault propagation, and explicit one-way-write
-semantics that were not present in CANDev.
-
-## F0480 DVGA
-
-`SET_VGA` carries four attenuation values, and `SET_COMBINED` carries the same four values in
-bytes `4..7`. Each value is expressed directly in dB. The F0480 supports every integer step
-from `0` through `23` dB.
-
-The F0480 serial byte uses `D6:D2` as a binary-weighted attenuation field:
-
-```text
-D6 D5 D4 D3 D2 = 16 dB, 8 dB, 4 dB, 2 dB, 1 dB
-D7, D1, D0      = don't care; firmware writes zero
-```
-
-Firmware therefore forms the command as:
+Attenuation is `0..23` dB. Command bits `D6:D2` encode `16,8,4,2,1` dB; `D7,D1,D0` are zero.
 
 ```text
 command = attenuation_db << 2
 ```
 
-Examples:
+| dB | Byte |
+|--:|:--|
+| 0 | `0x00` |
+| 3 | `0x0C` |
+| 8 | `0x20` |
+| 16 | `0x40` |
+| 23 | `0x5C` |
 
-| Attenuation | SPI byte |
-|:--|:--|
-| 0 dB | `0x00` |
-| 3 dB | `0x0C` |
-| 8 dB | `0x20` |
-| 16 dB | `0x40` |
-| 23 dB | `0x5C` |
+The driver retains channel `0..3`, but the checked-in board map identifies only SPI1 and PA4 CS. Add the final four-device selector net mapping in `vga.c`; do not infer pins.
 
-The names in the old VGA enum corresponded to individual bit weights and selected examples;
-they were not the complete set of supported attenuation states.
+## ACK limit
 
-The bulk control planner retains the VGA channel number with every generated F0480 operation.
-The checked-in C board map currently documents only SPI1 and one PA4 chip-select line; it does
-not identify the external selector pins needed for four independently addressed F0480 devices.
-The driver keeps the channel in its API so the final PCB selector mapping can be added without
-changing the CAN contract or planner, and the code deliberately does not invent GPIO pin names.
+Both buses are transmit-only. ACK confirms:
 
-## No RF-device acknowledgement
+1. CAN validation passed.
+2. The operation plan completed.
+3. STM32 SPI finished before latch/CS release.
 
-The receiver PCB connects clock, data-out-from-MCU, and latch/chip-select signals. It does not
-connect a return data line from either RF control device to the STM32. Both drivers therefore
-configure their SPI peripheral in transmit-only mode.
+ACK does not confirm RF-device decode or measured RF state.
 
-A BeamControl CAN `ACK` confirms that:
+## References
 
-1. the STM32 accepted and validated the CAN command;
-2. the requested local operation sequence was formed; and
-3. the STM32 SPI peripheral completed transmitting before latch/chip-select was released.
-
-It does not confirm that an RF IC decoded the word, changed state, or produced the expected RF
-response. Those properties require board-level logic-analyzer and RF measurements.
-
-## Datasheets
-
-- `docs/pere_s_a0006625230_1-2279326.pdf` — PE44820 product specification
-- `docs/REN_F0480_DST_20150427_1.pdf` — IDT/Renesas F0480 datasheet
-- `docs/PE44820_Lookup_2.4GHz.csv` — calibrated 2.4 GHz phase lookup used by firmware
+- `docs/pere_s_a0006625230_1-2279326.pdf`
+- `docs/REN_F0480_DST_20150427_1.pdf`
+- `docs/PE44820_Lookup_2.4GHz.csv`
