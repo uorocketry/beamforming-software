@@ -2,18 +2,11 @@
 
 BeamControl controls four-channel RF receiver boards from a Raspberry Pi 5 over CAN.
 
-```text
-Operator / beamctl / dashboard
-              |
-Raspberry Pi 5, CAN node 0
-              |
-       CAN 2.0B, 500 kbit/s
-              |
-STM32 receiver board, node 1..30
-  |- channel 0
-  |- channel 1
-  |- channel 2
-  `- channel 3
+```mermaid
+flowchart LR
+    operator["Operator<br/>beamctl / dashboard"] --> pi["Raspberry Pi 5<br/>CAN node 0"]
+    pi -->|"CAN 2.0B<br/>500 kbit/s"| stm32["STM32 receiver board<br/>node 1..30"]
+    stm32 --> channels["RF channels 0..3"]
 ```
 
 One board is one CAN node. Phase shifters and DVGAs are board-local devices.

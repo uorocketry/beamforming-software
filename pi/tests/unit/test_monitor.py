@@ -4,18 +4,15 @@ from __future__ import annotations
 
 from collections.abc import Callable
 
-from beamcontrol import protocol as P
-from beamcontrol.client import BeamControlError, ProtocolInfo
+from beamcontrol.client import BeamControlError, NodeStatus
 from beamcontrol.config import BeamControlConfig
 from beamcontrol.monitor import BeamControlMonitor, configured_node_failure
 
-FLAGS = P.FEATURE_FLAGS
-
 
 class FakeClient:
-    def discover(self, destination: int) -> tuple[bytes, ProtocolInfo | None]:
+    def discover(self, destination: int) -> NodeStatus:
         if destination == 1:
-            return bytes([2, 1, 0, 1, 0, 0, 0, 0]), ProtocolInfo(2, 1, 0, P.FEATURE_FLAGS, 1)
+            return NodeStatus(2, 1, 0, 1, 0, 0, 0, 0)
         raise BeamControlError(f"no STATUS from node {destination}")
 
 
@@ -64,25 +61,17 @@ def test_monitor_keeps_dashboard_available_when_can_cannot_open() -> None:
     assert can_status["error"] == "can0 does not exist"
 
 
-def test_missing_protocol_info_rejected() -> None:
-    assert configured_node_failure(3, None) is not None
+def test_wrong_major_rejected() -> None:
+    assert configured_node_failure(3, NodeStatus(1, 9, 0, 3, 0, 0, 0, 0)) is not None
 
 
-def test_v1_rejected() -> None:
-    assert configured_node_failure(3, ProtocolInfo(1, 9, 0, FLAGS, 3)) is not None
+def test_newer_major_rejected() -> None:
+    assert configured_node_failure(3, NodeStatus(3, 0, 0, 3, 0, 0, 0, 0)) is not None
 
 
-def test_v3_rejected() -> None:
-    assert configured_node_failure(3, ProtocolInfo(3, 0, 0, FLAGS, 3)) is not None
+def test_wrong_minor_rejected() -> None:
+    assert configured_node_failure(3, NodeStatus(2, 0, 0, 3, 0, 0, 0, 0)) is not None
 
 
-def test_v20_rejected() -> None:
-    assert configured_node_failure(3, ProtocolInfo(2, 0, 0, FLAGS, 3)) is not None
-
-
-def test_v21_accepted() -> None:
-    assert configured_node_failure(3, ProtocolInfo(2, 1, 0, FLAGS, 3)) is None
-
-
-def test_missing_features_rejected() -> None:
-    assert configured_node_failure(3, ProtocolInfo(2, 1, 0, 0, 3)) is not None
+def test_exact_version_accepted() -> None:
+    assert configured_node_failure(3, NodeStatus(2, 1, 0, 3, 0, 0, 0, 0)) is None

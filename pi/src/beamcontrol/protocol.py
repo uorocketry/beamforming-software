@@ -5,11 +5,9 @@ See docs/can-protocol.md for the full spec.
 
 from __future__ import annotations
 
-from collections.abc import Iterable, Sequence
+from collections.abc import Sequence
 
-PROTOCOL_MAJOR = 2
-PROTOCOL_MINOR = 1
-PROTOCOL_PATCH = 0
+PROTOCOL_VERSION = (2, 1, 0)
 
 # --- Identifier bit fields (29-bit extended) ---
 TYPE_SHIFT = 26
@@ -42,39 +40,8 @@ RES_BAD_VALUE = 2
 RES_UNSUPPORTED = 3
 RES_HW_FAIL = 4
 RES_BUSY = 5
-RES_RESERVED_BYTES = 6
-RES_SEQUENCE_REUSE = 7
-RES_BROADCAST_NOT_ALLOWED = 8
-
-# --- Capability-discovery feature bits (mirror firmware CAN_PROTOCOL_FEATURE_*) ---
-FEATURE_STRICT_CHANNELS = 1 << 0
-FEATURE_ENTER_SAFE_ONLY_BROADCAST = 1 << 1
-FEATURE_RESERVED_ZERO_VALIDATION = 1 << 2
-FEATURE_DUPLICATE_REPLAY = 1 << 3
-FEATURE_PROTOCOL_INFO = 1 << 4
-FEATURE_SAFE_TRANSITIONS = 1 << 5
-FEATURE_TERMINAL_RESPONSE = 1 << 6
-FEATURE_STATUS_SUBTYPES = 1 << 7
-FEATURE_BULK_RF_UPDATE = 1 << 8
-FEATURE_INDIVIDUAL_RF_UPDATE = 1 << 9
-FEATURE_FLAGS = (
-    FEATURE_STRICT_CHANNELS
-    | FEATURE_ENTER_SAFE_ONLY_BROADCAST
-    | FEATURE_RESERVED_ZERO_VALIDATION
-    | FEATURE_DUPLICATE_REPLAY
-    | FEATURE_PROTOCOL_INFO
-    | FEATURE_SAFE_TRANSITIONS
-    | FEATURE_TERMINAL_RESPONSE
-    | FEATURE_STATUS_SUBTYPES
-    | FEATURE_BULK_RF_UPDATE
-    | FEATURE_INDIVIDUAL_RF_UPDATE
-)
-
-# --- Status subtypes / health flags ---
-STATUS_SUBTYPE_PROTOCOL_INFO = 0xF0
-
-# --- Capability discovery ---
-SEQ_CAPABILITIES = 0xFFFF
+RES_SEQUENCE_REUSE = 6
+RES_BROADCAST_NOT_ALLOWED = 7
 
 # Field limits
 PHASE_STATE_MAX = 255  # logical index into the receiver's calibrated phase lookup
@@ -114,7 +81,7 @@ def validate_channel(channel: int) -> None:
         raise ValueError(f"channel must be 0..{PHASE_ADDR_MAX}")
 
 
-def _validated_four(name: str, values: Iterable[int], maximum: int) -> bytes:
+def _validated_four(name: str, values: Sequence[int], maximum: int) -> bytes:
     try:
         items = list(values)
     except TypeError as exc:

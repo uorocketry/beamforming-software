@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Send protocol-v2 bulk smoke-test commands over Linux SocketCAN."""
+"""Send BeamControl protocol v2.1 commands over Linux SocketCAN."""
 
 from __future__ import annotations
 
@@ -22,7 +22,7 @@ CAN_NODE_CONTROLLER = 0
 CAN_NODE_MIN = 1
 CAN_NODE_MAX = 30
 CAN_NODE_BROADCAST = 31
-CAN_PROTOCOL_VERSION = 2
+CAN_PROTOCOL_VERSION = (2, 1, 0)
 CAN_RF_CHANNEL_COUNT = 4
 CAN_RF_CHANNEL_MAX = 3
 
@@ -52,6 +52,8 @@ class CommandResult(IntEnum):
     UNSUPPORTED = 3
     HARDWARE = 4
     BUSY = 5
+    SEQUENCE_REUSE = 6
+    BROADCAST_NOT_ALLOWED = 7
 
 
 class DecodedFrame(NamedTuple):
@@ -223,14 +225,16 @@ def print_response(fields: IdentifierFields, data: bytes) -> int:
 
     if len(data) != 8:
         raise ValueError("STATUS response must contain eight bytes")
-    if data[0] != CAN_PROTOCOL_VERSION:
-        raise ValueError(f"unsupported status protocol version {data[0]}")
+    version = tuple(data[:3])
+    if version != CAN_PROTOCOL_VERSION:
+        raise ValueError(f"unsupported status protocol version {version}")
 
     print(
         "STATUS: "
-        f"node={data[1]} phase_state={data[2]} phase_address={data[3]} "
-        f"attenuation_db={data[4]} health_flags=0x{data[5]:02x} "
-        f"rx_dropped={data[6]} invalid_commands={data[7]} "
+        f"version={data[0]}.{data[1]}.{data[2]} "
+        f"node={data[3]} health_flags=0x{data[4]:02x} "
+        f"rx_dropped={data[5]} tx_dropped={data[6]} "
+        f"invalid_commands={data[7]} "
         f"sequence={fields.sequence}"
     )
     return 0

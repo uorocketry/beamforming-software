@@ -1,9 +1,15 @@
 # Virtual end-to-end simulation
 
-```text
-beamd + FastAPI -- SocketCAN vcan0 -- Renode STM32F072
-                                      |- SPI1 VGA sink
-                                      `- SPI2 phase sink
+```mermaid
+flowchart LR
+    host["Host browser"] --> beamd
+
+    subgraph docker["Docker Compose network namespace"]
+        beamd["beamd + FastAPI"] <--> can["SocketCAN vcan0"]
+        can <--> renode["Renode STM32F072"]
+        renode --> vga["SPI1 VGA sink"]
+        renode --> phase["SPI2 phase sink"]
+    end
 ```
 
 Docker Compose creates `vcan0` inside its network namespace; the host gets no CAN interface.

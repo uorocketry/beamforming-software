@@ -31,7 +31,12 @@ class CanSmokeToolTests(unittest.TestCase):
             return int(match.group(1), 10)
 
         self.assertEqual(
-            MODULE.CAN_PROTOCOL_VERSION, macro("CAN_PROTOCOL_VERSION_MAJOR")
+            MODULE.CAN_PROTOCOL_VERSION,
+            (
+                macro("CAN_PROTOCOL_VERSION_MAJOR"),
+                macro("CAN_PROTOCOL_VERSION_MINOR"),
+                macro("CAN_PROTOCOL_VERSION_PATCH"),
+            ),
         )
         self.assertEqual(MODULE.CAN_RF_CHANNEL_COUNT, macro("CAN_RF_CHANNEL_COUNT"))
         self.assertEqual(MODULE.CAN_RF_CHANNEL_MAX, macro("CAN_RF_CHANNEL_MAX"))

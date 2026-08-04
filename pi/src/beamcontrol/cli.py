@@ -130,19 +130,17 @@ def main(argv: list[str] | None = None) -> int:
         if args.command == "discover":
             for node in range(1, 31):
                 try:
-                    _, info = c.discover(node)
-                    if info is not None:
-                        print(
-                            f"node {node:2d}: v{info.major}.{info.minor}.{info.patch} "
-                            f"flags=0x{info.feature_flags:04x} node_id={info.node_id}"
-                        )
-                    else:
-                        print(f"node {node:2d}: v2 status without PROTOCOL_INFO")
+                    status = c.discover(node)
+                    print(
+                        f"node {node:2d}: v{status.major}.{status.minor}.{status.patch} "
+                        f"health=0x{status.health_flags:02x} "
+                        f"rx_drop={status.rx_dropped} tx_drop={status.tx_dropped} "
+                        f"invalid={status.invalid_commands}"
+                    )
                 except BeamControlError:
                     pass
         elif args.command == "ping":
-            _, info = c.discover(args.node)
-            print("PROTOCOL_INFO:", info)
+            print("STATUS:", c.discover(args.node))
         elif args.command == "set-phase":
             if args.states is not None:
                 reply = c.set_phase(args.node, args.states)

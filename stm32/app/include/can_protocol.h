@@ -4,27 +4,9 @@
 #include <stdbool.h>
 #include <stdint.h>
 
-/*
- * Protocol versioning
- *
- * CAN_PROTOCOL_VERSION is retained because the legacy STATUS payload places
- * the major protocol version in byte 0.
- */
 #define CAN_PROTOCOL_VERSION_MAJOR 2u
 #define CAN_PROTOCOL_VERSION_MINOR 1u
 #define CAN_PROTOCOL_VERSION_PATCH 0u
-#define CAN_PROTOCOL_VERSION CAN_PROTOCOL_VERSION_MAJOR
-
-/*
- * A PING carrying sequence 0xffff requests both:
- *
- *   1. The legacy STATUS frame.
- *   2. A STATUS/PROTOCOL_INFO frame.
- *
- * Other message types retain their normal sequence semantics, including
- * sequence 0xffff, for backward compatibility with protocol 1.0 controllers.
- */
-#define CAN_PROTOCOL_DISCOVERY_SEQUENCE 0xffffu
 
 #define CAN_EXTENDED_ID_MAX 0x1fffffffu
 
@@ -57,102 +39,18 @@
 
 #define CAN_VGA_ATTENUATION_MAX_DB 23u
 
-/*
- * RF commands use exact DLCs: individual or bulk. Do not zero-pad them.
- * ENTER_SAFE and PING retain semantic-length plus zero-padding validation.
- */
-#define CAN_ENTER_SAFE_USED_LENGTH 1u
+#define CAN_ENTER_SAFE_LENGTH 1u
 #define CAN_SET_PHASE_INDIVIDUAL_LENGTH 2u
 #define CAN_SET_PHASE_BULK_LENGTH 4u
 #define CAN_SET_VGA_INDIVIDUAL_LENGTH 2u
 #define CAN_SET_VGA_BULK_LENGTH 4u
 #define CAN_SET_COMBINED_INDIVIDUAL_LENGTH 3u
 #define CAN_SET_COMBINED_BULK_LENGTH 8u
-#define CAN_PING_USED_LENGTH 0u
+#define CAN_PING_LENGTH 0u
 
 #define CAN_ACK_LENGTH 2u
 #define CAN_ERROR_LENGTH 2u
 #define CAN_STATUS_LENGTH 8u
-
-/*
- * The fixed-width STATUS byte 0 contains the protocol major version, now 2.
- *
- * Values 0xf0 through 0xff are reserved for explicitly subtyped STATUS
- * messages. Subtype 0xf0 is PROTOCOL_INFO.
- */
-#define CAN_STATUS_SUBTYPE_PROTOCOL_INFO 0xf0u
-
-typedef enum can_protocol_feature {
-    /*
-     * ENTER_SAFE accepts only zero-based RF channel indexes 0-3.
-     */
-    CAN_PROTOCOL_FEATURE_STRICT_CHANNELS =
-        1u << 0,
-
-    /*
-     * Broadcast destination 31 accepts ENTER_SAFE only.
-     */
-    CAN_PROTOCOL_FEATURE_ENTER_SAFE_ONLY_BROADCAST =
-        1u << 1,
-
-    /*
-     * Payload bytes beyond the command's used length must be zero.
-     */
-    CAN_PROTOCOL_FEATURE_RESERVED_ZERO_VALIDATION =
-        1u << 2,
-
-    /*
-     * Successfully completed state-changing commands are replay-cached.
-     */
-    CAN_PROTOCOL_FEATURE_DUPLICATE_REPLAY =
-        1u << 3,
-
-    /*
-     * PING sequence 0xffff produces PROTOCOL_INFO.
-     */
-    CAN_PROTOCOL_FEATURE_PROTOCOL_INFO =
-        1u << 4,
-
-    /*
-     * Phase-changing operations use the existing safe three-step transition.
-     */
-    CAN_PROTOCOL_FEATURE_SAFE_TRANSITIONS =
-        1u << 5,
-
-    /*
-     * Unicast state-changing commands produce ACK or ERROR.
-     */
-    CAN_PROTOCOL_FEATURE_TERMINAL_RESPONSE =
-        1u << 6,
-
-    /*
-     * STATUS values 0xf0-0xff are interpreted as explicit subtypes.
-     */
-    CAN_PROTOCOL_FEATURE_STATUS_SUBTYPES =
-        1u << 7,
-
-    /*
-     * SET_PHASE, SET_VGA and SET_COMBINED carry all four RF channels.
-     */
-    CAN_PROTOCOL_FEATURE_BULK_RF_UPDATE =
-        1u << 8,
-
-    /* RF commands support both one-channel and four-channel payloads. */
-    CAN_PROTOCOL_FEATURE_INDIVIDUAL_RF_UPDATE =
-        1u << 9
-} can_protocol_feature_t;
-
-#define CAN_PROTOCOL_FEATURE_FLAGS                         \
-    ((uint16_t)(CAN_PROTOCOL_FEATURE_STRICT_CHANNELS |     \
-                CAN_PROTOCOL_FEATURE_ENTER_SAFE_ONLY_BROADCAST | \
-                CAN_PROTOCOL_FEATURE_RESERVED_ZERO_VALIDATION |  \
-                CAN_PROTOCOL_FEATURE_DUPLICATE_REPLAY |          \
-                CAN_PROTOCOL_FEATURE_PROTOCOL_INFO |             \
-                CAN_PROTOCOL_FEATURE_SAFE_TRANSITIONS |          \
-                CAN_PROTOCOL_FEATURE_TERMINAL_RESPONSE |         \
-                CAN_PROTOCOL_FEATURE_STATUS_SUBTYPES |            \
-                CAN_PROTOCOL_FEATURE_BULK_RF_UPDATE |              \
-                CAN_PROTOCOL_FEATURE_INDIVIDUAL_RF_UPDATE))
 
 typedef enum can_message_type {
     CAN_MESSAGE_ENTER_SAFE = 0,
@@ -174,12 +72,7 @@ typedef enum can_decode_result {
     CAN_DECODE_INVALID_LENGTH = 4,
     CAN_DECODE_INVALID_PAYLOAD = 5,
     CAN_DECODE_UNSUPPORTED_TYPE = 6,
-
-    /*
-     * Append-only result values: existing numeric values above stay unchanged.
-     */
-    CAN_DECODE_RESERVED_BYTES = 7,
-    CAN_DECODE_BROADCAST_NOT_ALLOWED = 8
+    CAN_DECODE_BROADCAST_NOT_ALLOWED = 7
 } can_decode_result_t;
 
 typedef enum can_command_result {
@@ -189,11 +82,8 @@ typedef enum can_command_result {
     CAN_COMMAND_RESULT_UNSUPPORTED = 3,
     CAN_COMMAND_RESULT_HARDWARE = 4,
     CAN_COMMAND_RESULT_BUSY = 5,
-
-    /* Additional protocol validation/runtime results. */
-    CAN_COMMAND_RESULT_RESERVED_BYTES = 6,
-    CAN_COMMAND_RESULT_SEQUENCE_REUSE = 7,
-    CAN_COMMAND_RESULT_BROADCAST_NOT_ALLOWED = 8
+    CAN_COMMAND_RESULT_SEQUENCE_REUSE = 6,
+    CAN_COMMAND_RESULT_BROADCAST_NOT_ALLOWED = 7
 } can_command_result_t;
 
 typedef enum can_health_flag {
@@ -231,33 +121,23 @@ typedef struct can_command {
 
 typedef struct can_status_payload {
     uint8_t node_id;
-    uint8_t phase_state;
-    uint8_t phase_address;
-    uint8_t attenuation_db;
     uint8_t health_flags;
     uint16_t rx_dropped;
+    uint16_t tx_dropped;
     uint16_t invalid_commands;
 } can_status_payload_t;
 
 /*
- * STATUS/PROTOCOL_INFO wire payload:
- *
- * Byte 0: 0xf0, CAN_STATUS_SUBTYPE_PROTOCOL_INFO
- * Byte 1: protocol major
- * Byte 2: protocol minor
- * Byte 3: protocol patch
- * Byte 4: feature flags bits 7:0
- * Byte 5: feature flags bits 15:8
- * Byte 6: source/node ID
- * Byte 7: reserved, zero
+ * STATUS wire payload:
+ * Byte 0: protocol major
+ * Byte 1: protocol minor
+ * Byte 2: protocol patch
+ * Byte 3: source/node ID
+ * Byte 4: health flags
+ * Byte 5: receive-drop count, low byte
+ * Byte 6: transmit-drop count, low byte
+ * Byte 7: invalid-command count, low byte
  */
-typedef struct can_protocol_info_payload {
-    uint8_t major;
-    uint8_t minor;
-    uint8_t patch;
-    uint16_t feature_flags;
-    uint8_t node_id;
-} can_protocol_info_payload_t;
 
 bool can_protocol_make_id(
     can_message_type_t type,
@@ -300,15 +180,7 @@ bool can_protocol_make_status(
     const can_status_payload_t *status,
     can_frame_t *frame);
 
-bool can_protocol_make_protocol_info_status(
-    uint8_t source_node,
-    uint8_t destination_node,
-    uint16_t sequence,
-    can_frame_t *frame);
-
 bool can_protocol_is_state_changing_type(can_message_type_t type);
-
-bool can_protocol_is_discovery_ping(const can_command_t *command);
 
 can_command_result_t can_protocol_result_from_decode(
     can_decode_result_t result);

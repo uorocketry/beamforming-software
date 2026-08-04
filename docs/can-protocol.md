@@ -60,19 +60,19 @@ RF commands require exact DLCs:
 | `SET_VGA` | 2 | 4 |
 | `SET_COMBINED` | 3 | 8 |
 
-RF frames are not padded: DLC 2/3 means individual and DLC 4/8 means bulk. A padded individual frame is therefore a bulk frame. `ENTER_SAFE` uses one semantic byte; `PING` may be zero-padded only with zero bytes.
+Every command uses an exact DLC. `ENTER_SAFE` is 1 byte and `PING` is empty.
 
 ## Execution order
 
-- Individual `SET_PHASE`: attenuate the selected channel to 23 dB if needed, write phase, restore attenuation.
-- Bulk `SET_PHASE`: attenuate affected channels, write all four phases, restore each prior attenuation.
-- Individual `SET_VGA`: write one attenuation.
-- Bulk `SET_VGA`: validate all four values, then write all four.
-- Individual `SET_COMBINED`: 23 dB, phase, requested attenuation on one channel.
-- Bulk `SET_COMBINED`: 23 dB on all channels, four phases, four requested attenuations.
-- `ENTER_SAFE`: 23 dB and phase state zero on one channel. Broadcast is allowed only for this command.
+```mermaid
+flowchart LR
+    vga[SET_VGA] --> vgaWrite["Write attenuation(s)"]
+    phase[SET_PHASE] --> phaseSafe["23 dB"] --> phaseWrite["Write phase(s)"] --> restore["Restore attenuation(s)"]
+    combined[SET_COMBINED] --> combinedSafe["23 dB"] --> combinedPhase["Write phase(s)"] --> apply["Apply attenuation(s)"]
+    safe[ENTER_SAFE] --> safeAtten["23 dB"] --> safePhase["Phase state 0"]
+```
 
-The planner validates the complete frame before hardware writes.
+The planner validates the complete frame before hardware writes. Broadcast is allowed only for `ENTER_SAFE`.
 
 ## ACK, retries, replay
 
@@ -101,39 +101,25 @@ The receiver caches the latest successful unicast state-changing request:
 | `3` | `UNSUPPORTED` | Not a controller command |
 | `4` | `HARDWARE` | Hardware operation failed |
 | `5` | `BUSY` | Cannot accept command |
-| `6` | `RESERVED_BYTES` | Nonzero padding on a command that permits padding |
-| `7` | `SEQUENCE_REUSE` | Same key, different request bytes |
-| `8` | `BROADCAST_NOT_ALLOWED` | Non-safe broadcast |
+| `6` | `SEQUENCE_REUSE` | Same key, different request bytes |
+| `7` | `BROADCAST_NOT_ALLOWED` | Non-safe broadcast |
 
 ## Status and discovery
 
-Normal `PING` returns a channel-0 snapshot:
+`PING` returns one STATUS frame:
 
 ```text
 0 protocol major (2)
-1 node ID
-2 phase state
-3 PE44820 address (1)
-4 attenuation dB
-5 health flags
-6 RX-drop count low byte
+1 protocol minor (1)
+2 protocol patch (0)
+3 node ID
+4 health flags
+5 RX-drop count low byte
+6 TX-drop count low byte
 7 invalid-command count low byte
 ```
 
-`PING` sequence `0xffff` also returns `PROTOCOL_INFO`:
-
-```text
-0 0xf0
-1 major (2)
-2 minor (1)
-3 patch (0)
-4 feature flags low
-5 feature flags high
-6 node ID
-7 zero
-```
-
-Required feature bits include `BULK_RF_UPDATE` (bit 8) and `INDIVIDUAL_RF_UPDATE` (bit 9).
+Version matching is exact.
 
 ## Contract vectors
 

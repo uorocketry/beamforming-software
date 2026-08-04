@@ -275,14 +275,11 @@ static void send_status(const can_runtime_t *runtime, const can_command_t *comma
         return;
     }
 
-    /* Legacy STATUS reports a deterministic channel-0 snapshot. */
     const can_status_payload_t status = {
         .node_id = runtime->node_id,
-        .phase_state = runtime->state.phase_states[0],
-        .phase_address = CAN_PHASE_ADDRESS_MIN,
-        .attenuation_db = runtime->state.attenuation_db[0],
         .health_flags = health_flags(runtime),
         .rx_dropped = can_bus_rx_dropped(),
+        .tx_dropped = can_bus_tx_dropped(),
         .invalid_commands = runtime->invalid_commands,
     };
 
@@ -292,24 +289,6 @@ static void send_status(const can_runtime_t *runtime, const can_command_t *comma
             command->source,
             command->sequence,
             &status,
-            &response)) {
-        send_frame_if_possible(&response, CAN_TX_PRIORITY_REQUESTED_STATUS);
-    }
-}
-
-static void send_protocol_info_status(
-    const can_runtime_t *runtime,
-    const can_command_t *command)
-{
-    if (!command_is_unicast(command)) {
-        return;
-    }
-
-    can_frame_t response = {0};
-    if (can_protocol_make_protocol_info_status(
-            runtime->node_id,
-            command->source,
-            command->sequence,
             &response)) {
         send_frame_if_possible(&response, CAN_TX_PRIORITY_REQUESTED_STATUS);
     }
@@ -422,11 +401,7 @@ bool can_runtime_service_next(can_runtime_t *runtime)
     }
 
     if (command.type == CAN_MESSAGE_PING) {
-        /* Send the fixed-width STATUS snapshot before the protocol-info frame. */
         send_status(runtime, &command);
-        if (can_protocol_is_discovery_ping(&command)) {
-            send_protocol_info_status(runtime, &command);
-        }
         return true;
     }
 

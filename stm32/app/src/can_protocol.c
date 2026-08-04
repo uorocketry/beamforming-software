@@ -9,9 +9,6 @@ _Static_assert(CAN_MESSAGE_TYPE_COUNT == 8,
 _Static_assert(CAN_RF_CHANNEL_COUNT == 4,
                "BeamControl protocol requires exactly four RF channels.");
 
-_Static_assert(CAN_PROTOCOL_FEATURE_FLAGS <= UINT16_MAX,
-               "Protocol feature flags must fit in 16 bits.");
-
 static void can_protocol_clear_frame(can_frame_t *frame)
 {
     memset(frame, 0, sizeof(*frame));
@@ -19,40 +16,12 @@ static void can_protocol_clear_frame(can_frame_t *frame)
     frame->remote = false;
 }
 
-static can_decode_result_t can_protocol_validate_used_length(
-    const can_frame_t *frame,
-    uint8_t used_length)
-{
-    uint8_t index;
-
-    if (frame->length < used_length || frame->length > CAN_MAX_DATA_LENGTH) {
-        return CAN_DECODE_INVALID_LENGTH;
-    }
-
-    /*
-     * Bytes after the command's semantic payload are reserved. They must be
-     * zero when present.
-     */
-    for (index = used_length; index < frame->length; ++index) {
-        if (frame->data[index] != 0u) {
-            return CAN_DECODE_RESERVED_BYTES;
-        }
-    }
-
-    return CAN_DECODE_OK;
-}
-
 static can_decode_result_t can_protocol_decode_enter_safe(
     const can_frame_t *frame,
     can_command_t *command)
 {
-    const can_decode_result_t result =
-        can_protocol_validate_used_length(
-            frame,
-            CAN_ENTER_SAFE_USED_LENGTH);
-
-    if (result != CAN_DECODE_OK) {
-        return result;
+    if (frame->length != CAN_ENTER_SAFE_LENGTH) {
+        return CAN_DECODE_INVALID_LENGTH;
     }
 
     command->channel = frame->data[0];
@@ -158,15 +127,9 @@ static can_decode_result_t can_protocol_decode_set_vga(
 static can_decode_result_t can_protocol_decode_ping(
     const can_frame_t *frame)
 {
-    /*
-     * A normal legacy PING uses DLC 0.
-     *
-     * Zero-padded PING frames with DLC 1-8 are also valid, but every byte must
-     * be zero.
-     */
-    return can_protocol_validate_used_length(
-        frame,
-        CAN_PING_USED_LENGTH);
+    return frame->length == CAN_PING_LENGTH
+        ? CAN_DECODE_OK
+        : CAN_DECODE_INVALID_LENGTH;
 }
 
 bool can_protocol_make_id(
@@ -435,55 +398,15 @@ bool can_protocol_make_status(
         return false;
     }
 
-    /*
-     * Preserve the protocol 1.0 legacy STATUS layout exactly.
-     */
     frame->length = CAN_STATUS_LENGTH;
-    frame->data[0] = (uint8_t)CAN_PROTOCOL_VERSION;
-    frame->data[1] = status->node_id;
-    frame->data[2] = status->phase_state;
-    frame->data[3] = status->phase_address;
-    frame->data[4] = status->attenuation_db;
-    frame->data[5] = status->health_flags;
-    frame->data[6] = (uint8_t)(status->rx_dropped & 0xffu);
+    frame->data[0] = (uint8_t)CAN_PROTOCOL_VERSION_MAJOR;
+    frame->data[1] = (uint8_t)CAN_PROTOCOL_VERSION_MINOR;
+    frame->data[2] = (uint8_t)CAN_PROTOCOL_VERSION_PATCH;
+    frame->data[3] = status->node_id;
+    frame->data[4] = status->health_flags;
+    frame->data[5] = (uint8_t)(status->rx_dropped & 0xffu);
+    frame->data[6] = (uint8_t)(status->tx_dropped & 0xffu);
     frame->data[7] = (uint8_t)(status->invalid_commands & 0xffu);
-
-    return true;
-}
-
-bool can_protocol_make_protocol_info_status(
-    uint8_t source_node,
-    uint8_t destination_node,
-    uint16_t sequence,
-    can_frame_t *frame)
-{
-    uint16_t feature_flags = CAN_PROTOCOL_FEATURE_FLAGS;
-
-    if (frame == NULL) {
-        return false;
-    }
-
-    can_protocol_clear_frame(frame);
-
-    if (!can_protocol_make_id(
-            CAN_MESSAGE_STATUS,
-            destination_node,
-            source_node,
-            sequence,
-            &frame->id)) {
-        return false;
-    }
-
-    frame->length = CAN_STATUS_LENGTH;
-
-    frame->data[0] = CAN_STATUS_SUBTYPE_PROTOCOL_INFO;
-    frame->data[1] = (uint8_t)CAN_PROTOCOL_VERSION_MAJOR;
-    frame->data[2] = (uint8_t)CAN_PROTOCOL_VERSION_MINOR;
-    frame->data[3] = (uint8_t)CAN_PROTOCOL_VERSION_PATCH;
-    frame->data[4] = (uint8_t)(feature_flags & 0xffu);
-    frame->data[5] = (uint8_t)((feature_flags >> 8) & 0xffu);
-    frame->data[6] = source_node;
-    frame->data[7] = 0u;
 
     return true;
 }
@@ -507,18 +430,6 @@ bool can_protocol_is_state_changing_type(can_message_type_t type)
     }
 }
 
-bool can_protocol_is_discovery_ping(const can_command_t *command)
-{
-    if (command == NULL) {
-        return false;
-    }
-
-    return
-        (command->type == CAN_MESSAGE_PING) &&
-        (command->sequence == CAN_PROTOCOL_DISCOVERY_SEQUENCE) &&
-        (command->destination != CAN_NODE_BROADCAST);
-}
-
 can_command_result_t can_protocol_result_from_decode(
     can_decode_result_t result)
 {
@@ -528,9 +439,6 @@ can_command_result_t can_protocol_result_from_decode(
 
     case CAN_DECODE_INVALID_LENGTH:
         return CAN_COMMAND_RESULT_INVALID_LENGTH;
-
-    case CAN_DECODE_RESERVED_BYTES:
-        return CAN_COMMAND_RESULT_RESERVED_BYTES;
 
     case CAN_DECODE_BROADCAST_NOT_ALLOWED:
         return CAN_COMMAND_RESULT_BROADCAST_NOT_ALLOWED;

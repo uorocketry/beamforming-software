@@ -111,17 +111,14 @@ def test_invalid_bulk_payload_rejected_client_side(buses):
         driver.stop()
 
 
-def test_discover_returns_protocol_info(buses):
+def test_discover_returns_status(buses):
     ctrl, node = buses
     driver = NodeDriver(FakeBeamControlNode(node, 3))
     driver.start()
     try:
         client = BeamControlClient(VirtualTransport(ctrl), timeout=0.5, retries=0)
-        legacy, info = client.discover(3)
-        assert info is not None
-        assert info.major == 2 and info.minor == 1
-        assert info.node_id == 3
-        assert info.feature_flags == P.FEATURE_FLAGS
-        assert legacy[0] == P.PROTOCOL_MAJOR
+        status = client.discover(3)
+        assert status.version == P.PROTOCOL_VERSION
+        assert status.node_id == 3
     finally:
         driver.stop()

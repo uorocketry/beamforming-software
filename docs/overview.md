@@ -1,17 +1,6 @@
 # BeamControl overview
 
-BeamControl splits supervision and deterministic RF control:
-
-```text
-beamctl / dashboard
-        |
-Raspberry Pi 5, node 0
-        |
-       CAN
-        |
-STM32 receiver, node 1..30
-  `- four RF channels
-```
+BeamControl splits Pi supervision from deterministic STM32 RF control.
 
 ## Pi
 
@@ -32,8 +21,19 @@ A board is one CAN node; RF devices are local peripherals.
 
 ## Command path
 
-```text
-beamctl -> CAN -> decode/validate -> safe operation plan -> SPI/GPIO -> ACK
+```mermaid
+sequenceDiagram
+    participant Operator as beamctl
+    participant Pi as Pi client
+    participant STM32 as STM32 receiver
+    participant RF as RF devices
+
+    Operator->>Pi: Individual or bulk command
+    Pi->>STM32: CAN request
+    STM32->>STM32: Decode, validate, plan
+    STM32->>RF: SPI/GPIO writes
+    STM32-->>Pi: ACK or ERROR
+    Pi-->>Operator: Result
 ```
 
 ACK confirms STM32 transfer completion, not RF-device readback.

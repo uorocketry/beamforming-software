@@ -102,14 +102,9 @@ class TestConstants(unittest.TestCase):
         self.assertEqual(P.CONTROLLER_NODE, 0)
         self.assertEqual(P.BROADCAST_NODE, 31)
 
-    def test_discovery_sequence_reserved(self):
-        self.assertEqual(P.SEQ_CAPABILITIES, 0xFFFF)
-
-    def test_protocol_version_and_rf_features(self):
-        self.assertEqual((P.PROTOCOL_MAJOR, P.PROTOCOL_MINOR, P.PROTOCOL_PATCH), (2, 1, 0))
+    def test_protocol_version(self):
+        self.assertEqual(P.PROTOCOL_VERSION, (2, 1, 0))
         self.assertEqual(P.RF_CHANNEL_COUNT, 4)
-        self.assertTrue(P.FEATURE_FLAGS & P.FEATURE_BULK_RF_UPDATE)
-        self.assertTrue(P.FEATURE_FLAGS & P.FEATURE_INDIVIDUAL_RF_UPDATE)
 
 
 if __name__ == "__main__":

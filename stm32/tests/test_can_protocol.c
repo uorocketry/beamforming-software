@@ -324,7 +324,7 @@ static void test_decode_validates_lengths_and_payloads(void)
         nonzero,
         sizeof(nonzero));
     assert(can_protocol_decode_command(&frame, 1u, &command)
-        == CAN_DECODE_RESERVED_BYTES);
+        == CAN_DECODE_INVALID_LENGTH);
 
     frame = frame_for(CAN_MESSAGE_PING, 1u, 2u, 6u, NULL, 0u);
     assert(can_protocol_decode_command(&frame, 1u, &command) == CAN_DECODE_INVALID_ID);
@@ -393,31 +393,21 @@ static void test_response_builders(void)
 
     const can_status_payload_t status = {
         .node_id = 1u,
-        .phase_state = 146u,
-        .phase_address = 1u,
-        .attenuation_db = 23u,
         .health_flags = CAN_HEALTH_CLOCK_FALLBACK,
-        .rx_dropped = 300u,
+        .rx_dropped = 3u,
+        .tx_dropped = 4u,
         .invalid_commands = 2u,
     };
     assert(can_protocol_make_status(1u, 0u, 44u, &status, &response));
     assert(response.length == 8u);
     assert(response.data[0] == CAN_PROTOCOL_VERSION_MAJOR);
-    assert(response.data[1] == 1u);
-    assert(response.data[2] == 146u);
+    assert(response.data[1] == CAN_PROTOCOL_VERSION_MINOR);
+    assert(response.data[2] == CAN_PROTOCOL_VERSION_PATCH);
     assert(response.data[3] == 1u);
-    assert(response.data[4] == 23u);
-    assert(response.data[5] == CAN_HEALTH_CLOCK_FALLBACK);
-    assert(response.data[6] == 44u);
+    assert(response.data[4] == CAN_HEALTH_CLOCK_FALLBACK);
+    assert(response.data[5] == 3u);
+    assert(response.data[6] == 4u);
     assert(response.data[7] == 2u);
-
-    assert(can_protocol_make_protocol_info_status(1u, 0u, 45u, &response));
-    assert(response.data[0] == CAN_STATUS_SUBTYPE_PROTOCOL_INFO);
-    assert(response.data[1] == CAN_PROTOCOL_VERSION_MAJOR);
-    assert(response.data[2] == CAN_PROTOCOL_VERSION_MINOR);
-    assert(response.data[3] == CAN_PROTOCOL_VERSION_PATCH);
-    assert(response.data[4] == (CAN_PROTOCOL_FEATURE_FLAGS & 0xffu));
-    assert(response.data[5] == (CAN_PROTOCOL_FEATURE_FLAGS >> 8u));
 }
 
 int main(void)

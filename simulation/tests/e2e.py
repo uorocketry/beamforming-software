@@ -80,12 +80,9 @@ def main() -> int:
     transport = SocketCanTransport("vcan0")
     try:
         client = BeamControlClient(transport, timeout=0.5, retries=2)
-        legacy, info = client.discover(1)
-        assert legacy[0] == P.PROTOCOL_MAJOR and legacy[1] == 1
-        assert info is not None
-        assert (info.major, info.minor, info.patch) == (2, 1, 0)
-        assert info.node_id == 1
-        assert info.feature_flags == P.FEATURE_FLAGS
+        status = client.discover(1)
+        assert status.version == P.PROTOCOL_VERSION
+        assert status.node_id == 1
 
         assert client.set_phase(1, [128, 64, 32, 16]) == bytes([P.SET_PHASE, P.RES_OK])
         assert client.set_vga(1, [8, 9, 10, 11]) == bytes([P.SET_VGA, P.RES_OK])
