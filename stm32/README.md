@@ -43,17 +43,47 @@ Both RF buses are transmit-only. ACK means the STM32 completed the transfer, not
 
 ## Source map
 
+```mermaid
+flowchart LR
+    main["main.c<br/>startup + service loop"]
+
+    subgraph can["can/"]
+        bus["bus + queues"]
+        protocol["protocol codec"]
+        runtime["runtime + replay"]
+    end
+
+    subgraph rf["rf/"]
+        commands["serial commands"]
+        plan["safe planner"]
+        execute["plan executor"]
+        drivers["PE44820 + F0480 drivers"]
+    end
+
+    subgraph platform["platform/"]
+        board["board pins"]
+        support["clock, time, watchdog, faults, diagnostics"]
+    end
+
+    main --> runtime
+    main --> plan --> execute --> drivers
+    bus --> runtime --> protocol
+    runtime --> plan
+    runtime --> execute
+    plan --> commands
+    drivers --> board
+    main --> support
+    runtime --> support
+```
+
 ```text
-app/src/main.c              startup/main loop
-app/src/can_runtime.c       execution/responses/replay
-app/src/can_protocol.c      CAN codec
-app/src/can_bus.c           bxCAN transport/ISR
-app/src/can_control.c       safe operation planner
-app/src/phaseShifter.c      PE44820 driver
-app/src/vga.c               F0480 driver
-app/src/diagnostics.c       retained diagnostics
-app/src/faults.c            fault reset handlers
-tests/                      native tests
+app/src/main.c       startup and service loop
+app/src/can/         CAN hardware, codec, queues, runtime
+app/src/rf/          RF encoding, planning, execution, drivers
+app/src/platform/    board map, clock, time, faults, diagnostics
+app/include/         matching public headers
+bringup/             archived bench code and evidence; not compiled
+tests/               native unit and contract tests
 ```
 
 See [RF encoding](../docs/rf-control.md) and [hardware validation](docs/HARDWARE_VALIDATION.md).

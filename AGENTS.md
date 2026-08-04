@@ -13,3 +13,10 @@
 
 - Use only repositories, branches, or implementations named by the user.
 - Do not inspect unrelated rewrites as design references unless the user explicitly asks.
+
+## Firmware layout
+
+- Keep production firmware under `stm32/app/src/{can,rf,platform}` with matching headers under `stm32/app/include/`.
+- Keep board GPIO and alternate-function assignments in `platform/board.h`.
+- Keep bench experiments and captured media under `stm32/bringup/`, not production source directories.
+- Name modules by responsibility: CAN transport/codec, RF planning/execution, or platform support.

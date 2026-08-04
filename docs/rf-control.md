@@ -4,7 +4,7 @@ CAN carries logical values; STM32 builds device serial words.
 
 ## PE44820
 
-Each phase value is a `0..255` lookup index. Firmware maps it to a calibrated 2.4 GHz `optimizedPhaseState_e` value from `PhaseStateEnum.h`:
+Each phase value is a `0..255` lookup index. Firmware maps it to a calibrated 2.4 GHz `optimizedPhaseState_e` value from `rf/phase_states_2_4ghz.h`:
 
 ```text
 bit 8     OPT

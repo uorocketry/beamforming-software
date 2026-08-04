@@ -23,8 +23,8 @@ CAN_NODE_MIN = 1
 CAN_NODE_MAX = 30
 CAN_NODE_BROADCAST = 31
 CAN_PROTOCOL_VERSION = (2, 1, 0)
-CAN_RF_CHANNEL_COUNT = 4
-CAN_RF_CHANNEL_MAX = 3
+RF_CHANNEL_COUNT = 4
+RF_CHANNEL_MAX = 3
 
 CAN_ID_TYPE_SHIFT = 26
 CAN_ID_DESTINATION_SHIFT = 21
@@ -113,7 +113,7 @@ def command_payload(message_type: MessageType, values: Sequence[int]) -> bytes:
         valid = (len(values) == 4 and all(0 <= value <= 255 for value in values)) or (
             len(values) == 2
             and 0 <= values[0] <= 255
-            and 0 <= values[1] <= CAN_RF_CHANNEL_MAX
+            and 0 <= values[1] <= RF_CHANNEL_MAX
         )
         if not valid:
             raise ValueError("phase requires STATE CHANNEL or four states")
@@ -121,7 +121,7 @@ def command_payload(message_type: MessageType, values: Sequence[int]) -> bytes:
         valid = (len(values) == 4 and all(0 <= value <= 23 for value in values)) or (
             len(values) == 2
             and 0 <= values[0] <= 23
-            and 0 <= values[1] <= CAN_RF_CHANNEL_MAX
+            and 0 <= values[1] <= RF_CHANNEL_MAX
         )
         if not valid:
             raise ValueError("vga requires ATTENUATION CHANNEL or four attenuations")
@@ -133,7 +133,7 @@ def command_payload(message_type: MessageType, values: Sequence[int]) -> bytes:
         ) or (
             len(values) == 3
             and 0 <= values[0] <= 255
-            and 0 <= values[1] <= CAN_RF_CHANNEL_MAX
+            and 0 <= values[1] <= RF_CHANNEL_MAX
             and 0 <= values[2] <= 23
         )
         if not valid:
@@ -141,7 +141,7 @@ def command_payload(message_type: MessageType, values: Sequence[int]) -> bytes:
                 "combined requires STATE CHANNEL ATTENUATION or four states and four attenuations"
             )
     elif message_type is MessageType.ENTER_SAFE:
-        if len(values) != 1 or not 0 <= values[0] <= CAN_RF_CHANNEL_MAX:
+        if len(values) != 1 or not 0 <= values[0] <= RF_CHANNEL_MAX:
             raise ValueError("safe requires CHANNEL 0..3")
     elif message_type is MessageType.PING:
         if values:

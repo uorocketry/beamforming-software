@@ -7,13 +7,13 @@ pi/dist/
 stm32/.deps/
 stm32/app/build/
 stm32/tests/test_build_info
-stm32/tests/test_can_control
 stm32/tests/test_can_protocol
-stm32/tests/test_can_queue
+stm32/tests/test_can_rx_queue
 stm32/tests/test_can_tx_queue
 stm32/tests/test_diagnostics
-stm32/tests/test_protocol
 stm32/tests/test_protocol_vectors
+stm32/tests/test_rf_commands
+stm32/tests/test_rf_plan
 **/__pycache__/
 **/.pytest_cache/
 *.pyc

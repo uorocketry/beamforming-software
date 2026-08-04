@@ -1,0 +1,13 @@
+#ifndef RF_LIMITS_H
+#define RF_LIMITS_H
+
+#define RF_CHANNEL_MIN 0u
+#define RF_CHANNEL_MAX 3u
+#define RF_CHANNEL_COUNT 4u
+
+#define PHASE_UNIT_ADDRESS_MIN 1u
+#define PHASE_UNIT_ADDRESS_MAX 4u
+
+#define VGA_MAX_ATTENUATION_DB 23u
+
+#endif

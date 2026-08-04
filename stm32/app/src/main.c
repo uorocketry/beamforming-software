@@ -1,14 +1,16 @@
-#include "PhaseShifter.h"
-#include "Vga.h"
-#include "beamforming_protocol.h"
-#include "build_info.h"
-#include "can_runtime.h"
-#include "clock_control.h"
-#include "diagnostics.h"
-#include "faults.h"
-#include "firmware_config.h"
-#include "timebase.h"
-#include "watchdog.h"
+#include "can/runtime.h"
+#include "platform/build_info.h"
+#include "platform/clock.h"
+#include "platform/diagnostics.h"
+#include "platform/faults.h"
+#include "platform/firmware_config.h"
+#include "platform/timebase.h"
+#include "platform/watchdog.h"
+#include "rf/commands.h"
+#include "rf/execute.h"
+#include "rf/phase_shifter.h"
+#include "rf/plan.h"
+#include "rf/vga.h"
 
 #include <libopencm3/stm32/rcc.h>
 
@@ -21,20 +23,6 @@
 #define SAFE_PHASE_MILLIDEGREES 0u
 #define SAFE_VGA_ATTENUATION_DB 23u
 #define FIRMWARE_RESET_FLAG_MASK 0xfe000000u
-
-static firmware_fault_t vga_fault_from_status(spi_guard_status_t status)
-{
-    return (status == SPI_GUARD_TIMEOUT)
-        ? FIRMWARE_FAULT_VGA_SPI_TIMEOUT
-        : FIRMWARE_FAULT_VGA_SPI_ERROR;
-}
-
-static firmware_fault_t phase_fault_from_status(spi_guard_status_t status)
-{
-    return (status == SPI_GUARD_TIMEOUT)
-        ? FIRMWARE_FAULT_PHASE_SPI_TIMEOUT
-        : FIRMWARE_FAULT_PHASE_SPI_ERROR;
-}
 
 static void service_without_can(void) __attribute__((noreturn));
 
@@ -74,7 +62,7 @@ int main(void)
     const bool safe_lockout = diagnostics_lockout_required();
 
     firmware_clock_t clock_source = FIRMWARE_CLOCK_UNKNOWN;
-    if (!clock_control_setup(&clock_source)) {
+    if (!clock_setup(&clock_source)) {
         firmware_fail(FIRMWARE_FAULT_CLOCK_STARTUP);
     }
 
@@ -85,11 +73,6 @@ int main(void)
     f0480spisetup();
     pe448spisetup();
 
-    uint8_t vga_command = 0u;
-    if (!MakeVGACommand(SAFE_VGA_ATTENUATION_DB, &vga_command)) {
-        firmware_fail(FIRMWARE_FAULT_VGA_COMMAND);
-    }
-
     const uint32_t requested_phase = safe_lockout
         ? SAFE_PHASE_MILLIDEGREES
         : OPERATIONAL_PHASE_MILLIDEGREES;
@@ -98,47 +81,45 @@ int main(void)
         firmware_fail(FIRMWARE_FAULT_PHASE_COMMAND);
     }
 
-    const optimizedPhaseState_e phaseState = GetOptimizedPhaseState(phase_state);
-    uint16_t phase_command = 0u;
+    rf_plan_t startup_plan = {0};
+    if (!rf_plan_startup(
+            phase_state,
+            SAFE_VGA_ATTENUATION_DB,
+            &startup_plan)) {
+        firmware_fail(FIRMWARE_FAULT_PHASE_COMMAND);
+    }
 
-    spi_guard_status_t status = SPI_GUARD_OK;
-    for (uint8_t channel = 0u; channel < CAN_RF_CHANNEL_COUNT; ++channel) {
-        status = vga_write(channel, vga_command, SPI_TIMEOUT_MILLIS);
-        if (status != SPI_GUARD_OK) {
-            firmware_fail(vga_fault_from_status(status));
-        }
+    uint16_t phase_command = 0u;
+    uint8_t vga_command = 0u;
+
+    /* The startup plan begins with one maximum-attenuation write per channel. */
+    for (uint8_t index = 0u; index < RF_CHANNEL_COUNT; ++index) {
+        rf_execute_operation(
+            &startup_plan.operations[index],
+            SPI_TIMEOUT_MILLIS,
+            &phase_command,
+            &vga_command);
     }
     diagnostics_set_state(FIRMWARE_STATE_SAFE_OUTPUTS);
 
-    /* Program the same startup phase into PE44820 addresses 1 through 4. */
-    for (uint8_t channel = 0u; channel < CAN_RF_CHANNEL_COUNT; ++channel) {
-        const uint8_t phaseAddress =
-            (uint8_t)(CAN_PHASE_ADDRESS_MIN + channel);
-        phase_command = MakePSCommand(phaseState, phaseAddress);
-        status = phase_shifter_write(phase_command, SPI_TIMEOUT_MILLIS);
-        if (status != SPI_GUARD_OK) {
-            firmware_fail(phase_fault_from_status(status));
-        }
+    for (uint8_t index = RF_CHANNEL_COUNT;
+         index < startup_plan.operation_count;
+         ++index) {
+        rf_execute_operation(
+            &startup_plan.operations[index],
+            SPI_TIMEOUT_MILLIS,
+            &phase_command,
+            &vga_command);
     }
-
     diagnostics_set_commands(phase_command, vga_command);
 
-    const can_control_state_t initial_state = {
-        .phase_states = {phase_state, phase_state, phase_state, phase_state},
-        .attenuation_db = {
-            SAFE_VGA_ATTENUATION_DB,
-            SAFE_VGA_ATTENUATION_DB,
-            SAFE_VGA_ATTENUATION_DB,
-            SAFE_VGA_ATTENUATION_DB,
-        },
-    };
     can_runtime_t runtime = {0};
     if (!can_runtime_start(
             &runtime,
             BEAMFORMER_NODE_ID,
             clock_source,
             safe_lockout,
-            &initial_state,
+            &startup_plan.resulting_state,
             phase_command,
             vga_command)) {
         if (safe_lockout) {

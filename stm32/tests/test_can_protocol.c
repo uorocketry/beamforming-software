@@ -1,4 +1,4 @@
-#include "can_protocol.h"
+#include "can/protocol.h"
 
 #include <assert.h>
 #include <stdio.h>
@@ -94,7 +94,7 @@ static void test_decode_bulk_commands(void)
     assert(command.destination == 1u);
     assert(command.sequence == 7u);
     assert(command.bulk_update);
-    assert(memcmp(command.phase_states, phase_payload, CAN_RF_CHANNEL_COUNT) == 0);
+    assert(memcmp(command.phase_states, phase_payload, RF_CHANNEL_COUNT) == 0);
 
     const uint8_t vga_payload[] = {0u, 8u, 12u, 23u};
     frame = frame_for(
@@ -107,7 +107,7 @@ static void test_decode_bulk_commands(void)
     memset(&command, 0, sizeof(command));
     assert(can_protocol_decode_command(&frame, 1u, &command) == CAN_DECODE_OK);
     assert(command.bulk_update);
-    assert(memcmp(command.attenuation_db, vga_payload, CAN_RF_CHANNEL_COUNT) == 0);
+    assert(memcmp(command.attenuation_db, vga_payload, RF_CHANNEL_COUNT) == 0);
 
     const uint8_t combined_payload[] = {
         10u, 20u, 30u, 40u,
@@ -123,11 +123,11 @@ static void test_decode_bulk_commands(void)
     memset(&command, 0, sizeof(command));
     assert(can_protocol_decode_command(&frame, 1u, &command) == CAN_DECODE_OK);
     assert(command.bulk_update);
-    assert(memcmp(command.phase_states, combined_payload, CAN_RF_CHANNEL_COUNT) == 0);
+    assert(memcmp(command.phase_states, combined_payload, RF_CHANNEL_COUNT) == 0);
     assert(memcmp(
         command.attenuation_db,
-        &combined_payload[CAN_RF_CHANNEL_COUNT],
-        CAN_RF_CHANNEL_COUNT) == 0);
+        &combined_payload[RF_CHANNEL_COUNT],
+        RF_CHANNEL_COUNT) == 0);
 }
 
 

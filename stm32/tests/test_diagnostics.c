@@ -1,4 +1,4 @@
-#include "diagnostic_record.h"
+#include "platform/diagnostic_record.h"
 
 #include <assert.h>
 #include <stdint.h>

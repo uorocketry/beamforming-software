@@ -1,5 +1,5 @@
 /* Protocol contract test: the C firmware must agree with the shared protocol
- * vectors. Compiles protocol/generated/protocol_vectors.h against can_protocol.c
+ * vectors. Compiles protocol/generated/protocol_vectors.h against can/protocol.c
  * so the generated header is real, compilable C AND matches the firmware.
  *
  * Build:  make -C stm32/tests test
@@ -9,7 +9,7 @@
 #include <stdio.h>
 #include <string.h>
 
-#include "can_protocol.h"
+#include "can/protocol.h"
 #include "protocol_vectors.h"
 
 static void test_id_vectors(void)

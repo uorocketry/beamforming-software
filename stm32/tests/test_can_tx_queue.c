@@ -1,10 +1,10 @@
-/* Host test for the prioritized TX queue (can_tx_queue.c). No libopencm3. */
+/* Host test for the prioritized TX queue. No libopencm3. */
 #include <assert.h>
 #include <stdint.h>
 #include <stdio.h>
 #include <string.h>
 
-#include "can_tx_queue.h"
+#include "can/tx_queue.h"
 
 static can_frame_t frame_with(uint32_t id, uint8_t tag)
 {
