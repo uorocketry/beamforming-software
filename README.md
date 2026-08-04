@@ -79,12 +79,14 @@ Valid receiver-board IDs are `1..30`. The build writes `beamcontrol.elf`,
 ```bash
 beamctl discover
 beamctl ping 1
-beamctl set-phase 1 --channel 2 --state 128
+beamctl set-phase 1 --states 128 64 32 16
+beamctl set-vga 1 --attenuations 8 9 10 11
+beamctl set-combined 1 --states 64 65 66 67 --attenuations 12 13 14 15
 beamd --config /etc/uorocketry/beamcontrol.toml
 ```
 
-The first positional ID is the receiver-board CAN node. `--channel` selects one of that
-board's four RF channels (`0..3`).
+The first positional ID is the receiver-board CAN node. The bulk RF commands always provide
+four values in channel order. `enter-safe` remains channel-specific and uses `--channel 0..3`.
 
 `beamd` owns the CAN status monitor and serves a read-only FastAPI/Jinja2/HTMX dashboard on
 port `8080`. The dashboard remains available when CAN hardware or receiver boards are offline.

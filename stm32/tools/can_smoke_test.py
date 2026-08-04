@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Send protocol-v1 smoke-test commands over Linux SocketCAN."""
+"""Send protocol-v2 bulk smoke-test commands over Linux SocketCAN."""
 
 from __future__ import annotations
 
@@ -8,8 +8,9 @@ import socket
 import struct
 import sys
 import time
+from collections.abc import Sequence
 from enum import IntEnum
-from typing import NamedTuple, Sequence
+from typing import NamedTuple
 
 CAN_EFF_FLAG = 0x80000000
 CAN_RTR_FLAG = 0x40000000
@@ -21,7 +22,9 @@ CAN_NODE_CONTROLLER = 0
 CAN_NODE_MIN = 1
 CAN_NODE_MAX = 30
 CAN_NODE_BROADCAST = 31
-CAN_PROTOCOL_VERSION = 1
+CAN_PROTOCOL_VERSION = 2
+CAN_RF_CHANNEL_COUNT = 4
+CAN_RF_CHANNEL_MAX = 3
 
 CAN_ID_TYPE_SHIFT = 26
 CAN_ID_DESTINATION_SHIFT = 21
@@ -73,7 +76,7 @@ def make_identifier(
     sequence: int,
 ) -> int:
     if not isinstance(message_type, MessageType):
-        raise ValueError("message_type must be a MessageType")
+        raise TypeError("message_type must be a MessageType")
     if not 0 <= destination <= CAN_NODE_BROADCAST:
         raise ValueError("destination must be in the range 0..31")
     if not 0 <= source <= CAN_NODE_BROADCAST:
@@ -105,24 +108,27 @@ def command_payload(message_type: MessageType, values: Sequence[int]) -> bytes:
     values = list(values)
 
     if message_type is MessageType.SET_PHASE:
-        if len(values) != 2 or not 0 <= values[0] <= 255 or not 0 <= values[1] <= 15:
-            raise ValueError("phase requires STATE 0..255 and ADDRESS 0..15")
+        if len(values) != CAN_RF_CHANNEL_COUNT or any(
+            not 0 <= value <= 255 for value in values
+        ):
+            raise ValueError("phase requires four state indexes, each 0..255")
     elif message_type is MessageType.SET_VGA:
-        if len(values) != 1 or not 0 <= values[0] <= 23:
-            raise ValueError("vga requires ATTENUATION_DB 0..23")
+        if len(values) != CAN_RF_CHANNEL_COUNT or any(
+            not 0 <= value <= 23 for value in values
+        ):
+            raise ValueError("vga requires four attenuation values, each 0..23")
     elif message_type is MessageType.SET_COMBINED:
         if (
-            len(values) != 3
-            or not 0 <= values[0] <= 255
-            or not 0 <= values[1] <= 15
-            or not 0 <= values[2] <= 23
+            len(values) != 2 * CAN_RF_CHANNEL_COUNT
+            or any(not 0 <= value <= 255 for value in values[:CAN_RF_CHANNEL_COUNT])
+            or any(not 0 <= value <= 23 for value in values[CAN_RF_CHANNEL_COUNT:])
         ):
             raise ValueError(
-                "combined requires STATE 0..255, ADDRESS 0..15, and ATTENUATION_DB 0..23"
+                "combined requires four state indexes followed by four attenuation values"
             )
     elif message_type is MessageType.ENTER_SAFE:
-        if len(values) != 1 or not 0 <= values[0] <= 15:
-            raise ValueError("safe requires ADDRESS 0..15")
+        if len(values) != 1 or not 0 <= values[0] <= CAN_RF_CHANNEL_MAX:
+            raise ValueError("safe requires CHANNEL 0..3")
     elif message_type is MessageType.PING:
         if values:
             raise ValueError("ping has no payload")
@@ -185,7 +191,8 @@ def receive_matching_response(
             fields.destination == CAN_NODE_CONTROLLER
             and fields.source == expected_source
             and fields.sequence == sequence
-            and fields.message_type in (MessageType.STATUS, MessageType.ACK, MessageType.ERROR)
+            and fields.message_type
+            in (MessageType.STATUS, MessageType.ACK, MessageType.ERROR)
         ):
             return fields, frame.data
 
@@ -257,24 +264,40 @@ def parser() -> argparse.ArgumentParser:
     ping = subparsers.add_parser("ping", help="request node status")
     ping.add_argument("node", type=int)
 
-    phase = subparsers.add_parser("phase", help="set one phase-shifter state")
+    phase = subparsers.add_parser("phase", help="set all four phase-shifter states")
     phase.add_argument("node", type=int)
-    phase.add_argument("state", type=int)
-    phase.add_argument("address", type=int)
+    phase.add_argument(
+        "states", type=int, nargs=4, metavar=("PS1", "PS2", "PS3", "PS4")
+    )
 
-    vga = subparsers.add_parser("vga", help="set VGA attenuation")
+    vga = subparsers.add_parser("vga", help="set all four VGA attenuations")
     vga.add_argument("node", type=int)
-    vga.add_argument("attenuation_db", type=int)
+    vga.add_argument(
+        "attenuations_db",
+        type=int,
+        nargs=4,
+        metavar=("VGA1", "VGA2", "VGA3", "VGA4"),
+    )
 
-    combined = subparsers.add_parser("combined", help="safely set phase and attenuation")
+    combined = subparsers.add_parser(
+        "combined", help="set all four phases and attenuations"
+    )
     combined.add_argument("node", type=int)
-    combined.add_argument("state", type=int)
-    combined.add_argument("address", type=int)
-    combined.add_argument("attenuation_db", type=int)
+    combined.add_argument(
+        "states", type=int, nargs=4, metavar=("PS1", "PS2", "PS3", "PS4")
+    )
+    combined.add_argument(
+        "attenuations_db",
+        type=int,
+        nargs=4,
+        metavar=("VGA1", "VGA2", "VGA3", "VGA4"),
+    )
 
-    safe = subparsers.add_parser("safe", help="set maximum attenuation and zero phase")
+    safe = subparsers.add_parser(
+        "safe", help="set one channel to maximum attenuation and zero phase"
+    )
     safe.add_argument("node", type=int)
-    safe.add_argument("address", type=int)
+    safe.add_argument("channel", type=int)
 
     return result
 
@@ -289,17 +312,16 @@ def main(argv: Sequence[str] | None = None) -> int:
 
     action_map = {
         "ping": (MessageType.PING, []),
-        "phase": (MessageType.SET_PHASE, [getattr(args, "state", 0), getattr(args, "address", 0)]),
-        "vga": (MessageType.SET_VGA, [getattr(args, "attenuation_db", 0)]),
+        "phase": (MessageType.SET_PHASE, getattr(args, "states", [])),
+        "vga": (MessageType.SET_VGA, getattr(args, "attenuations_db", [])),
         "combined": (
             MessageType.SET_COMBINED,
             [
-                getattr(args, "state", 0),
-                getattr(args, "address", 0),
-                getattr(args, "attenuation_db", 0),
+                *getattr(args, "states", []),
+                *getattr(args, "attenuations_db", []),
             ],
         ),
-        "safe": (MessageType.ENTER_SAFE, [getattr(args, "address", 0)]),
+        "safe": (MessageType.ENTER_SAFE, [getattr(args, "channel", 0)]),
     }
     message_type, values = action_map[args.action]
 

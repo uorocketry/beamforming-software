@@ -1,9 +1,15 @@
-"""BeamControl CAN protocol v1.1 constants and helpers (29-bit extended @ 500 kbit/s).
+"""BeamControl CAN protocol v2.0 constants and helpers (29-bit extended @ 500 kbit/s).
 
 See docs/can-protocol.md for the full spec.
 """
 
 from __future__ import annotations
+
+from collections.abc import Iterable, Sequence
+
+PROTOCOL_MAJOR = 2
+PROTOCOL_MINOR = 0
+PROTOCOL_PATCH = 0
 
 # --- Identifier bit fields (29-bit extended) ---
 TYPE_SHIFT = 26
@@ -49,6 +55,7 @@ FEATURE_PROTOCOL_INFO = 1 << 4
 FEATURE_SAFE_TRANSITIONS = 1 << 5
 FEATURE_TERMINAL_RESPONSE = 1 << 6
 FEATURE_STATUS_SUBTYPES = 1 << 7
+FEATURE_BULK_RF_UPDATE = 1 << 8
 FEATURE_FLAGS = (
     FEATURE_STRICT_CHANNELS
     | FEATURE_ENTER_SAFE_ONLY_BROADCAST
@@ -58,6 +65,7 @@ FEATURE_FLAGS = (
     | FEATURE_SAFE_TRANSITIONS
     | FEATURE_TERMINAL_RESPONSE
     | FEATURE_STATUS_SUBTYPES
+    | FEATURE_BULK_RF_UPDATE
 )
 
 # --- Status subtypes / health flags ---
@@ -68,7 +76,8 @@ SEQ_CAPABILITIES = 0xFFFF
 
 # Field limits
 PHASE_STATE_MAX = 255  # logical index into the receiver's calibrated phase lookup
-PHASE_ADDR_MAX = 3  # BeamControl has 4 channels (0-3)
+RF_CHANNEL_COUNT = 4
+PHASE_ADDR_MAX = RF_CHANNEL_COUNT - 1
 ATTEN_DB_MAX = 23  # F0480 supports every 1 dB step from 0 through 23 dB
 
 
@@ -94,10 +103,27 @@ def parse_id(can_id: int) -> dict:
     }
 
 
-def validate_payload(channel: int, phase_state: int = 0, atten_db: int = 0) -> None:
+def validate_channel(channel: int) -> None:
     if not (0 <= channel <= PHASE_ADDR_MAX):
         raise ValueError(f"channel must be 0..{PHASE_ADDR_MAX}")
-    if not (0 <= phase_state <= PHASE_STATE_MAX):
-        raise ValueError(f"phase_state must be 0..{PHASE_STATE_MAX}")
-    if not (0 <= atten_db <= ATTEN_DB_MAX):
-        raise ValueError(f"atten_db must be 0..{ATTEN_DB_MAX}")
+
+
+def _validated_four(name: str, values: Iterable[int], maximum: int) -> bytes:
+    try:
+        items = list(values)
+    except TypeError as exc:
+        raise ValueError(f"{name} must contain exactly {RF_CHANNEL_COUNT} values") from exc
+    if len(items) != RF_CHANNEL_COUNT:
+        raise ValueError(f"{name} must contain exactly {RF_CHANNEL_COUNT} values")
+    for value in items:
+        if not isinstance(value, int) or isinstance(value, bool) or not (0 <= value <= maximum):
+            raise ValueError(f"each {name} value must be 0..{maximum}")
+    return bytes(items)
+
+
+def validate_phase_states(phase_states: Sequence[int]) -> bytes:
+    return _validated_four("phase_states", phase_states, PHASE_STATE_MAX)
+
+
+def validate_attenuations(attenuation_db: Sequence[int]) -> bytes:
+    return _validated_four("attenuation_db", attenuation_db, ATTEN_DB_MAX)

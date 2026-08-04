@@ -6,8 +6,9 @@ the RF IC command words.
 
 ## PE44820 phase shifter
 
-`SET_PHASE` and `SET_COMBINED` carry an 8-bit `phase_state` in the range `0..255`. The byte is a
-logical phase index, not the PE44820 `D7:D0` field itself.
+`SET_PHASE` carries four 8-bit phase indexes, and `SET_COMBINED` carries the same four indexes
+in bytes `0..3`. Each value is in the range `0..255` and is a logical phase index, not the
+PE44820 `D7:D0` field itself.
 
 Firmware defines the calibrated 2.4 GHz words as `optimizedPhaseState_e` enum constants
 in `stm32/app/include/PhaseStateEnum.h`. Each C2x binary literal shows the complete
@@ -71,8 +72,9 @@ semantics that were not present in CANDev.
 
 ## F0480 DVGA
 
-`SET_VGA` and `SET_COMBINED` carry attenuation directly in dB. The F0480 supports every integer
-step from `0` through `23` dB.
+`SET_VGA` carries four attenuation values, and `SET_COMBINED` carries the same four values in
+bytes `4..7`. Each value is expressed directly in dB. The F0480 supports every integer step
+from `0` through `23` dB.
 
 The F0480 serial byte uses `D6:D2` as a binary-weighted attenuation field:
 
@@ -99,6 +101,12 @@ Examples:
 
 The names in the old VGA enum corresponded to individual bit weights and selected examples;
 they were not the complete set of supported attenuation states.
+
+The bulk control planner retains the VGA channel number with every generated F0480 operation.
+The checked-in C board map currently documents only SPI1 and one PA4 chip-select line; it does
+not identify the external selector pins needed for four independently addressed F0480 devices.
+The driver keeps the channel in its API so the final PCB selector mapping can be added without
+changing the CAN contract or planner, and the code deliberately does not invent GPIO pin names.
 
 ## No RF-device acknowledgement
 

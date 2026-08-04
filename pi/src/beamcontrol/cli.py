@@ -40,15 +40,48 @@ def build_parser() -> argparse.ArgumentParser:
     p.add_argument("node", type=int, help="receiver-board CAN node 1-30")
     _add_common_args(p)
 
-    p = sub.add_parser("set-phase", help="set one receiver-board RF channel phase")
+    p = sub.add_parser("set-phase", help="set all four receiver-board phase states")
     p.add_argument("node", type=int, help="receiver-board CAN node 1-30")
-    p.add_argument("--channel", type=int, required=True, help="RF channel 0-3")
-    p.add_argument("--state", type=int, required=True, help="phase state 0-255")
+    p.add_argument(
+        "--states",
+        nargs=4,
+        type=int,
+        required=True,
+        metavar=("PS1", "PS2", "PS3", "PS4"),
+        help="four phase-state indexes 0-255",
+    )
     _add_common_args(p)
 
-    p = sub.add_parser("set-vga", help="set receiver-board DVGA attenuation (dB)")
+    p = sub.add_parser("set-vga", help="set all four receiver-board DVGA attenuations")
     p.add_argument("node", type=int, help="receiver-board CAN node 1-30")
-    p.add_argument("--attenuation", type=int, required=True, help="dB 0-23")
+    p.add_argument(
+        "--attenuations",
+        nargs=4,
+        type=int,
+        required=True,
+        metavar=("VGA1", "VGA2", "VGA3", "VGA4"),
+        help="four attenuation values in dB, each 0-23",
+    )
+    _add_common_args(p)
+
+    p = sub.add_parser("set-combined", help="set all four phase states and VGA attenuations")
+    p.add_argument("node", type=int, help="receiver-board CAN node 1-30")
+    p.add_argument(
+        "--states",
+        nargs=4,
+        type=int,
+        required=True,
+        metavar=("PS1", "PS2", "PS3", "PS4"),
+        help="four phase-state indexes 0-255",
+    )
+    p.add_argument(
+        "--attenuations",
+        nargs=4,
+        type=int,
+        required=True,
+        metavar=("VGA1", "VGA2", "VGA3", "VGA4"),
+        help="four attenuation values in dB, each 0-23",
+    )
     _add_common_args(p)
 
     p = sub.add_parser("enter-safe", help="enter safe state on one RF channel")
@@ -73,16 +106,18 @@ def main(argv: list[str] | None = None) -> int:
                             f"flags=0x{info.feature_flags:04x} node_id={info.node_id}"
                         )
                     else:
-                        print(f"node {node:2d}: legacy v1.0")
+                        print(f"node {node:2d}: v2 status without PROTOCOL_INFO")
                 except BeamControlError:
                     pass
         elif args.command == "ping":
             _, info = c.discover(args.node)
             print("PROTOCOL_INFO:", info)
         elif args.command == "set-phase":
-            print("ACK", c.set_phase(args.node, args.state, args.channel).hex())
+            print("ACK", c.set_phase(args.node, args.states).hex())
         elif args.command == "set-vga":
-            print("ACK", c.set_vga(args.node, args.attenuation).hex())
+            print("ACK", c.set_vga(args.node, args.attenuations).hex())
+        elif args.command == "set-combined":
+            print("ACK", c.set_combined(args.node, args.states, args.attenuations).hex())
         elif args.command == "enter-safe":
             print("ACK", c.enter_safe(args.node, args.channel).hex())
         return 0

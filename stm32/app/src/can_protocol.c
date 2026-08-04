@@ -12,11 +12,6 @@ _Static_assert(CAN_RF_CHANNEL_COUNT == 4,
 _Static_assert(CAN_PROTOCOL_FEATURE_FLAGS <= UINT16_MAX,
                "Protocol feature flags must fit in 16 bits.");
 
-static bool can_protocol_node_valid(uint8_t node)
-{
-    return node <= CAN_NODE_BROADCAST;
-}
-
 static void can_protocol_clear_frame(can_frame_t *frame)
 {
     memset(frame, 0, sizeof(*frame));
@@ -30,7 +25,7 @@ static can_decode_result_t can_protocol_validate_used_length(
 {
     uint8_t index;
 
-    if (frame->length < used_length) {
+    if (frame->length < used_length || frame->length > CAN_MAX_DATA_LENGTH) {
         return CAN_DECODE_INVALID_LENGTH;
     }
 
@@ -51,7 +46,7 @@ static can_decode_result_t can_protocol_decode_enter_safe(
     const can_frame_t *frame,
     can_command_t *command)
 {
-    can_decode_result_t result =
+    const can_decode_result_t result =
         can_protocol_validate_used_length(
             frame,
             CAN_ENTER_SAFE_USED_LENGTH);
@@ -60,9 +55,8 @@ static can_decode_result_t can_protocol_decode_enter_safe(
         return result;
     }
 
-    command->phase_address = frame->data[0];
-
-    if (command->phase_address > CAN_RF_CHANNEL_MAX) {
+    command->safe_channel = frame->data[0];
+    if (command->safe_channel > CAN_RF_CHANNEL_MAX) {
         return CAN_DECODE_INVALID_PAYLOAD;
     }
 
@@ -73,7 +67,7 @@ static can_decode_result_t can_protocol_decode_set_combined(
     const can_frame_t *frame,
     can_command_t *command)
 {
-    can_decode_result_t result =
+    const can_decode_result_t result =
         can_protocol_validate_used_length(
             frame,
             CAN_SET_COMBINED_USED_LENGTH);
@@ -82,16 +76,17 @@ static can_decode_result_t can_protocol_decode_set_combined(
         return result;
     }
 
-    command->phase_state = frame->data[0];
-    command->phase_address = frame->data[1];
-    command->attenuation_db = frame->data[2];
+    /* Bytes 0..3 are phase indexes; bytes 4..7 are VGA attenuations. */
+    memcpy(command->phase_states, frame->data, CAN_RF_CHANNEL_COUNT);
+    memcpy(
+        command->attenuation_db,
+        &frame->data[CAN_RF_CHANNEL_COUNT],
+        CAN_RF_CHANNEL_COUNT);
 
-    if (command->phase_address > CAN_RF_CHANNEL_MAX) {
-        return CAN_DECODE_INVALID_PAYLOAD;
-    }
-
-    if (command->attenuation_db > CAN_VGA_ATTENUATION_MAX_DB) {
-        return CAN_DECODE_INVALID_PAYLOAD;
+    for (uint8_t channel = 0u; channel < CAN_RF_CHANNEL_COUNT; ++channel) {
+        if (command->attenuation_db[channel] > CAN_VGA_ATTENUATION_MAX_DB) {
+            return CAN_DECODE_INVALID_PAYLOAD;
+        }
     }
 
     return CAN_DECODE_OK;
@@ -101,7 +96,7 @@ static can_decode_result_t can_protocol_decode_set_phase(
     const can_frame_t *frame,
     can_command_t *command)
 {
-    can_decode_result_t result =
+    const can_decode_result_t result =
         can_protocol_validate_used_length(
             frame,
             CAN_SET_PHASE_USED_LENGTH);
@@ -110,13 +105,8 @@ static can_decode_result_t can_protocol_decode_set_phase(
         return result;
     }
 
-    command->phase_state = frame->data[0];
-    command->phase_address = frame->data[1];
-
-    if (command->phase_address > CAN_RF_CHANNEL_MAX) {
-        return CAN_DECODE_INVALID_PAYLOAD;
-    }
-
+    /* The four bytes are phase-enum indexes for channels 1 through 4. */
+    memcpy(command->phase_states, frame->data, CAN_RF_CHANNEL_COUNT);
     return CAN_DECODE_OK;
 }
 
@@ -124,7 +114,7 @@ static can_decode_result_t can_protocol_decode_set_vga(
     const can_frame_t *frame,
     can_command_t *command)
 {
-    can_decode_result_t result =
+    const can_decode_result_t result =
         can_protocol_validate_used_length(
             frame,
             CAN_SET_VGA_USED_LENGTH);
@@ -133,10 +123,12 @@ static can_decode_result_t can_protocol_decode_set_vga(
         return result;
     }
 
-    command->attenuation_db = frame->data[0];
-
-    if (command->attenuation_db > CAN_VGA_ATTENUATION_MAX_DB) {
-        return CAN_DECODE_INVALID_PAYLOAD;
+    /* The four bytes are integer-dB attenuation values for VGA channels 1..4. */
+    memcpy(command->attenuation_db, frame->data, CAN_RF_CHANNEL_COUNT);
+    for (uint8_t channel = 0u; channel < CAN_RF_CHANNEL_COUNT; ++channel) {
+        if (command->attenuation_db[channel] > CAN_VGA_ATTENUATION_MAX_DB) {
+            return CAN_DECODE_INVALID_PAYLOAD;
+        }
     }
 
     return CAN_DECODE_OK;
@@ -173,8 +165,7 @@ bool can_protocol_make_id(
         return false;
     }
 
-    if (!can_protocol_node_valid(destination) ||
-        !can_protocol_node_valid(source)) {
+    if (destination > CAN_NODE_BROADCAST || source > CAN_NODE_BROADCAST) {
         return false;
     }
 
@@ -290,7 +281,7 @@ can_decode_result_t can_protocol_decode_command(
     }
 
     /*
-     * Protocol 1.1 permits only ENTER_SAFE at the broadcast destination.
+     * Only ENTER_SAFE is permitted at the broadcast destination.
      *
      * No response will be emitted for this result because the runtime's error
      * helpers already suppress responses to broadcast destinations.

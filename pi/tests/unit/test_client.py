@@ -9,6 +9,9 @@ from beamcontrol.client import BeamControlClient, BeamControlError, BeamControlP
 
 from .fake_transport import FakeTransport
 
+PHASES = [128, 64, 32, 16]
+ATTENUATIONS = [0, 8, 12, 23]
+
 
 class FakeClock:
     def __init__(self) -> None:
@@ -56,7 +59,7 @@ def test_exact_retry_reuses_same_message():
     """On timeout, the retry resends the identical arbitration ID + bytes."""
     client, _, transport = _make([None], retries=2)
     with pytest.raises(BeamControlError):
-        client.set_phase(3, 128, 2)
+        client.set_phase(3, PHASES)
     sent = transport.sent
     assert len(sent) == 3  # 1 initial + 2 retries
     ids = {m.arbitration_id for m in sent}
@@ -67,7 +70,7 @@ def test_exact_retry_reuses_same_message():
 def test_ack_matching():
     client, _, _ = _make([_ack(3, 42, P.SET_PHASE)])
     client._seq = 41  # force next seq to 42
-    out = client.set_phase(3, 128, 2)
+    out = client.set_phase(3, PHASES)
     assert out == bytes([P.SET_PHASE, P.RES_OK])
 
 
@@ -77,21 +80,21 @@ def test_wrong_node_rejected():
     right = _ack(3, 42, P.SET_PHASE)
     client, _, _ = _make([wrong, right])
     client._seq = 41
-    assert client.set_phase(3, 128, 2) == bytes([P.SET_PHASE, P.RES_OK])
+    assert client.set_phase(3, PHASES) == bytes([P.SET_PHASE, P.RES_OK])
 
 
 def test_error_raises():
     client, _, _ = _make([_error(3, 42, P.SET_PHASE, P.RES_BAD_VALUE)])
     client._seq = 41
     with pytest.raises(BeamControlError) as exc:
-        client.set_phase(3, 128, 2)
+        client.set_phase(3, PHASES)
     assert exc.value.result == P.RES_BAD_VALUE
 
 
 def test_timeout_is_unknown_state():
     client, _, _ = _make([None], retries=0)
     with pytest.raises(BeamControlError) as exc:
-        client.set_vga(3, 23)
+        client.set_vga(3, ATTENUATIONS)
     assert "final state unknown" in str(exc.value)
 
 
@@ -104,44 +107,62 @@ def test_sequence_ffff_reserved():
     assert all(P.parse_id(m.arbitration_id)["sequence"] != P.SEQ_CAPABILITIES for m in sent)
 
 
-def test_strict_channel_validation():
+def test_bulk_payload_validation():
     client, _, _ = _make([None], retries=0)
     with pytest.raises(ValueError):
-        client.set_phase(3, 128, 4)  # channel out of 0..3
+        client.set_phase(3, [1, 2, 3])
     with pytest.raises(ValueError):
-        client.set_vga(3, 24)  # attenuation out of 0..23
+        client.set_phase(3, [1, 2, 3, 256])
+    with pytest.raises(ValueError):
+        client.set_vga(3, [0, 8, 24, 23])
+    with pytest.raises(ValueError):
+        client.set_combined(3, PHASES, [0, 1, 2])
 
 
 def test_discovery_legacy_only():
     legacy = _Reply(
-        P.build_id(P.STATUS, 0, 3, P.SEQ_CAPABILITIES), bytes([0x01, 3, 0, 0, 23, 0, 0, 0])
+        P.build_id(P.STATUS, 0, 3, P.SEQ_CAPABILITIES),
+        bytes([P.PROTOCOL_MAJOR, 3, 0, 1, 23, 0, 0, 0]),
     )
     client, _, _ = _make([legacy])
     legacy_data, info = client.discover(3)
     assert info is None
-    assert legacy_data[0] == 0x01
+    assert legacy_data[0] == P.PROTOCOL_MAJOR
 
 
 def test_discovery_with_protocol_info():
     legacy = _Reply(
-        P.build_id(P.STATUS, 0, 3, P.SEQ_CAPABILITIES), bytes([0x01, 3, 0, 0, 23, 0, 0, 0])
+        P.build_id(P.STATUS, 0, 3, P.SEQ_CAPABILITIES),
+        bytes([P.PROTOCOL_MAJOR, 3, 0, 1, 23, 0, 0, 0]),
     )
     info = _Reply(
         P.build_id(P.STATUS, 0, 3, P.SEQ_CAPABILITIES),
-        bytes([P.STATUS_SUBTYPE_PROTOCOL_INFO, 1, 1, 0, 0xFF, 0x00, 3, 0]),
+        bytes(
+            [
+                P.STATUS_SUBTYPE_PROTOCOL_INFO,
+                P.PROTOCOL_MAJOR,
+                P.PROTOCOL_MINOR,
+                P.PROTOCOL_PATCH,
+                P.FEATURE_FLAGS & 0xFF,
+                P.FEATURE_FLAGS >> 8,
+                3,
+                0,
+            ]
+        ),
     )
     client, _, _ = _make([legacy, info])
     _, pi = client.discover(3)
     assert pi is not None
-    assert pi.major == 1 and pi.minor == 1
+    assert pi.major == 2 and pi.minor == 0
     assert pi.node_id == 3
-    assert pi.feature_flags == 0xFF
+    assert pi.feature_flags == P.FEATURE_FLAGS
 
 
 def test_discovery_sends_ping():
     """discover() must transmit the PING@0xFFFF request, not just listen."""
     legacy = _Reply(
-        P.build_id(P.STATUS, 0, 3, P.SEQ_CAPABILITIES), bytes([0x01, 3, 0, 0, 23, 0, 0, 0])
+        P.build_id(P.STATUS, 0, 3, P.SEQ_CAPABILITIES),
+        bytes([P.PROTOCOL_MAJOR, 3, 0, 1, 23, 0, 0, 0]),
     )
     client, _, transport = _make([legacy])
     client.discover(3)
@@ -161,7 +182,7 @@ def test_ack_wrong_command_type_raises():
     client, _, _ = _make([wrong])
     client._seq = 41
     with pytest.raises(BeamControlProtocolError):
-        client.set_phase(3, 128, 2)
+        client.set_phase(3, PHASES)
 
 
 def test_ack_bad_dlc_raises():
@@ -170,7 +191,7 @@ def test_ack_bad_dlc_raises():
         client, _, _ = _make([wrong])
         client._seq = 41
         with pytest.raises(BeamControlProtocolError):
-            client.set_phase(3, 128, 2)
+            client.set_phase(3, PHASES)
 
 
 def test_error_wrong_command_type_raises():
@@ -178,11 +199,11 @@ def test_error_wrong_command_type_raises():
     client, _, _ = _make([wrong])
     client._seq = 41
     with pytest.raises(BeamControlProtocolError):
-        client.set_phase(3, 128, 2)
+        client.set_phase(3, PHASES)
 
 
 def test_discovery_wrong_sequence_ignored():
-    wrong = _Reply(P.build_id(P.STATUS, 0, 3, 7), bytes([0x01, 3, 0, 0, 23, 0, 0, 0]))
+    wrong = _Reply(P.build_id(P.STATUS, 0, 3, 7), bytes([P.PROTOCOL_MAJOR, 3, 0, 1, 23, 0, 0, 0]))
     client, _, _ = _make([wrong], retries=0)
     with pytest.raises(BeamControlError) as exc:
         client.discover(3)
@@ -192,7 +213,7 @@ def test_discovery_wrong_sequence_ignored():
 def test_discovery_short_protocol_info_raises():
     short = _Reply(
         P.build_id(P.STATUS, 0, 3, P.SEQ_CAPABILITIES),
-        bytes([P.STATUS_SUBTYPE_PROTOCOL_INFO, 1, 1]),
+        bytes([P.STATUS_SUBTYPE_PROTOCOL_INFO, 2, 0]),
     )
     client, _, _ = _make([short], retries=0)
     with pytest.raises(BeamControlProtocolError):
@@ -202,7 +223,18 @@ def test_discovery_short_protocol_info_raises():
 def test_discovery_mismatched_node_id_ignored():
     bad = _Reply(
         P.build_id(P.STATUS, 0, 3, P.SEQ_CAPABILITIES),
-        bytes([P.STATUS_SUBTYPE_PROTOCOL_INFO, 1, 1, 0, 0xFF, 0x00, 7, 0]),  # node 7 != 3
+        bytes(
+            [
+                P.STATUS_SUBTYPE_PROTOCOL_INFO,
+                P.PROTOCOL_MAJOR,
+                P.PROTOCOL_MINOR,
+                P.PROTOCOL_PATCH,
+                P.FEATURE_FLAGS & 0xFF,
+                P.FEATURE_FLAGS >> 8,
+                7,
+                0,
+            ]
+        ),  # node 7 != 3
     )
     client, _, _ = _make([bad], retries=0)
     with pytest.raises(BeamControlError) as exc:
@@ -213,7 +245,18 @@ def test_discovery_mismatched_node_id_ignored():
 def test_discovery_nonzero_reserved_ignored():
     bad = _Reply(
         P.build_id(P.STATUS, 0, 3, P.SEQ_CAPABILITIES),
-        bytes([P.STATUS_SUBTYPE_PROTOCOL_INFO, 1, 1, 0, 0xFF, 0x00, 3, 1]),  # byte7 != 0
+        bytes(
+            [
+                P.STATUS_SUBTYPE_PROTOCOL_INFO,
+                P.PROTOCOL_MAJOR,
+                P.PROTOCOL_MINOR,
+                P.PROTOCOL_PATCH,
+                P.FEATURE_FLAGS & 0xFF,
+                P.FEATURE_FLAGS >> 8,
+                3,
+                1,
+            ]
+        ),  # byte7 != 0
     )
     client, _, _ = _make([bad], retries=0)
     with pytest.raises(BeamControlError) as exc:
@@ -230,7 +273,7 @@ def test_unicast_destination_enforced():
         with pytest.raises(ValueError):
             client.enter_safe(bad, 0)
         with pytest.raises(ValueError):
-            client.set_phase(bad, 128, 2)
+            client.set_phase(bad, PHASES)
         with pytest.raises(ValueError):
             client.discover(bad)
 
@@ -268,7 +311,7 @@ def test_sequence_reuse_recovers_with_fresh_sequence():
     ack = _ack(3, 2, P.SET_PHASE)  # seq 2 -> accepted
     client, _, transport = _make([reuse, ack], retries=0)
     client._seq = 0
-    out = client.set_phase(3, 128, 2)
+    out = client.set_phase(3, PHASES)
     assert out == bytes([P.SET_PHASE, P.RES_OK])
     seqs = [P.parse_id(m.arbitration_id)["sequence"] for m in transport.sent]
     assert seqs == [1, 2]
@@ -281,5 +324,5 @@ def test_sequence_reuse_persisting_raises():
     client, _, _ = _make([reuse1, reuse2], retries=0)
     client._seq = 0
     with pytest.raises(BeamControlError) as exc:
-        client.set_phase(3, 128, 2)
+        client.set_phase(3, PHASES)
     assert exc.value.result == P.RES_SEQUENCE_REUSE

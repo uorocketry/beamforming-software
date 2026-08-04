@@ -1,4 +1,4 @@
-"""BeamControlClient: drive BeamControl receiver boards over CAN per protocol v1.1.
+"""BeamControlClient: drive BeamControl receiver boards over CAN per protocol v2.0.
 
 Contract (must hold for the firmware's single-entry replay cache to be safe):
 - At most one state-changing transaction outstanding per receiver node.
@@ -16,7 +16,7 @@ from __future__ import annotations
 
 import threading
 import time
-from collections.abc import Callable
+from collections.abc import Callable, Sequence
 from typing import Any
 
 import can
@@ -166,26 +166,27 @@ class BeamControlClient:
         raise BeamControlError(f"timeout node {destination}; final state unknown")
 
     def enter_safe(self, destination: int, channel: int) -> bytes:
-        P.validate_payload(channel)
+        P.validate_channel(channel)
         return self._transact(destination, P.ENTER_SAFE, [channel])
 
-    def set_phase(self, destination: int, phase_state: int, channel: int) -> bytes:
-        P.validate_payload(channel, phase_state=phase_state)
-        return self._transact(destination, P.SET_PHASE, [phase_state, channel])
+    def set_phase(self, destination: int, phase_states: Sequence[int]) -> bytes:
+        payload = P.validate_phase_states(phase_states)
+        return self._transact(destination, P.SET_PHASE, payload)
 
-    def set_vga(self, destination: int, atten_db: int) -> bytes:
-        P.validate_payload(0, atten_db=atten_db)
-        return self._transact(destination, P.SET_VGA, [atten_db])
+    def set_vga(self, destination: int, attenuation_db: Sequence[int]) -> bytes:
+        payload = P.validate_attenuations(attenuation_db)
+        return self._transact(destination, P.SET_VGA, payload)
 
     def set_combined(
-        self, destination: int, phase_state: int, channel: int, atten_db: int
+        self, destination: int, phase_states: Sequence[int], attenuation_db: Sequence[int]
     ) -> bytes:
-        P.validate_payload(channel, phase_state=phase_state, atten_db=atten_db)
-        return self._transact(destination, P.SET_COMBINED, [phase_state, channel, atten_db])
+        phase_payload = P.validate_phase_states(phase_states)
+        vga_payload = P.validate_attenuations(attenuation_db)
+        return self._transact(destination, P.SET_COMBINED, phase_payload + vga_payload)
 
     def broadcast_enter_safe(self, channel: int) -> None:
         """Broadcast ENTER_SAFE to all nodes (dest 31). No response is sent."""
-        P.validate_payload(channel)
+        P.validate_channel(channel)
         with self._io_lock:
             message = can.Message(
                 arbitration_id=P.build_id(
@@ -207,7 +208,7 @@ class BeamControlClient:
         """PING sequence 0xFFFF. Returns (legacy_status_bytes, ProtocolInfo|None).
 
         The node answers with the legacy STATUS frame first, then a
-        PROTOCOL_INFO STATUS frame. A v1.0 node sends only the legacy STATUS.
+        PROTOCOL_INFO STATUS frame. A pre-v2 node may send only the legacy STATUS.
         """
         msg = can.Message(
             arbitration_id=P.build_id(P.PING, destination, self._source, P.SEQ_CAPABILITIES),
@@ -241,7 +242,7 @@ class BeamControlClient:
                 info = ProtocolInfo(d[1], d[2], d[3], (d[5] << 8) | d[4], d[6])
             elif legacy is None:
                 # legacy STATUS: byte0 = supported major version, byte1 = node id
-                if d[0] != 1 or d[1] != destination:
+                if d[0] != P.PROTOCOL_MAJOR or d[1] != destination:
                     continue
                 legacy = d
             if legacy is not None and info is not None:

@@ -5,7 +5,11 @@
 
 #include <stdint.h>
 
-#define CAN_CONTROL_MAX_OPERATIONS 3u
+/*
+ * Worst case for a four-channel safe transition:
+ *   4 writes to apply 23 dB + 4 phase writes + 4 final VGA writes.
+ */
+#define CAN_CONTROL_MAX_OPERATIONS 12u
 
 typedef enum can_control_operation_type {
     CAN_CONTROL_OPERATION_PHASE = 0,
@@ -14,13 +18,14 @@ typedef enum can_control_operation_type {
 
 typedef struct can_control_operation {
     can_control_operation_type_t type;
+    uint8_t channel; /* zero-based RF channel 0..3 */
     uint16_t command;
 } can_control_operation_t;
 
+/* Array index 0..3 always means physical RF channel 1..4. */
 typedef struct can_control_state {
-    uint8_t phase_state;
-    uint8_t phase_address;
-    uint8_t attenuation_db;
+    uint8_t phase_states[CAN_RF_CHANNEL_COUNT];
+    uint8_t attenuation_db[CAN_RF_CHANNEL_COUNT];
 } can_control_state_t;
 
 typedef struct can_control_plan {

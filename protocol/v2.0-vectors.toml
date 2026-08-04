@@ -1,4 +1,4 @@
-# Shared protocol v1.1 test vectors (language-neutral contract).
+# Shared protocol v2.0 test vectors (language-neutral contract).
 # Consumed by:
 #   - Python: pi/tests/contract/test_protocol_vectors.py (via tomllib)
 #   - C:      generated protocol_vectors.h (from tools/generate-protocol-vectors.py)
@@ -30,40 +30,49 @@ sequence = 1
 extended_id = 0x14070001
 
 [[commands]]
-name = "set_phase_ch2_state128"
+name = "set_phase_all_channels"
 type = 2
 destination = 3
 source = 0
 sequence = 42
-data = [128, 2]
+data = [128, 64, 32, 16]
 valid = true
 
 [[commands]]
-name = "set_vga_23db"
+name = "set_vga_all_channels"
 type = 3
 destination = 3
 source = 0
 sequence = 44
-data = [23]
+data = [0, 8, 12, 23]
 valid = true
 
 [[commands]]
-name = "reject_channel_4"
+name = "set_combined_all_channels"
+type = 1
+destination = 3
+source = 0
+sequence = 45
+data = [10, 20, 30, 40, 1, 2, 3, 4]
+valid = true
+
+[[commands]]
+name = "reject_short_phase_payload"
 type = 2
 destination = 3
 source = 0
-sequence = 43
-data = [128, 4]
+sequence = 46
+data = [128, 64, 32]
 valid = false
-result = 2
+result = 1
 
 [[commands]]
 name = "reject_attenuation_24"
 type = 3
 destination = 3
 source = 0
-sequence = 45
-data = [24]
+sequence = 47
+data = [0, 8, 24, 23]
 valid = false
 result = 2
 
@@ -72,8 +81,8 @@ name = "reject_reserved_bytes"
 type = 2
 destination = 3
 source = 0
-sequence = 46
-data = [128, 2, 0, 1]
+sequence = 48
+data = [128, 64, 32, 16, 0, 0, 0, 1]
 valid = false
 result = 6
 
@@ -82,6 +91,6 @@ name = "enter_safe_ch0"
 type = 0
 destination = 3
 source = 0
-sequence = 47
+sequence = 49
 data = [0]
 valid = true

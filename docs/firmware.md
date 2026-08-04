@@ -16,7 +16,7 @@ The build produces `beamcontrol.elf`, `beamcontrol.bin`, and `beamcontrol.map` u
 The firmware:
 
 - controls four local RF channels;
-- implements [CAN protocol v1.1](can-protocol.md);
+- implements [CAN protocol v2.0](can-protocol.md);
 - applies safe phase and attenuation transitions;
 - validates commands and sends ACK or ERROR responses; and
 - records retained reset and fault diagnostics.

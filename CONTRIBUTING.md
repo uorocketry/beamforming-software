@@ -6,7 +6,7 @@ team project, so keep changes minimal and reviewable.
 ## Repo layout
 
 - `pi/` — Raspberry Pi CAN controller (Python, `src/beamcontrol` package, console entry points `beamctl` and `beamd`).
-- `stm32/` — STM32 embedded firmware (C, libopencm3). CAN protocol v1.1 + prioritized TX queue.
+- `stm32/` — STM32 embedded firmware (C, libopencm3). CAN protocol v2.0 + prioritized TX queue.
 - `docs/` — project knowledge base (protocol spec, hardware, operations).
 - `protocol/` — shared, language-neutral protocol test vectors.
 - `tools/` — repo orchestration (toolchain/dependency fetch, generators, bundle builder).
@@ -28,7 +28,7 @@ make firmware NODE=1
 - `make check` must pass clean (lint, all tests, and a representative firmware build).
 - New/edited Python must be covered by a test in `pi/tests/` (unit with a fake
   transport, or integration on the virtual CAN bus).
-- Protocol changes must update `protocol/v1.1-vectors.toml` and regenerate the
+- Protocol changes must update `protocol/v2.0-vectors.toml` and regenerate the
   C header: `python3 tools/generate-protocol-vectors.py`. Both Python and C
   tests consume the same vectors, so they cannot silently drift.
 - Firmware queue/priority logic goes in `can_tx_queue.c/h` (host-testable), not

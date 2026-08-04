@@ -76,33 +76,64 @@ static void test_safe_command_has_highest_command_arbitration_priority(void)
     assert(phase_id < vga_id);
 }
 
-static void test_decode_phase_command(void)
+static void test_decode_bulk_commands(void)
 {
-    const uint8_t payload[] = {146u, 3u};
-    const can_frame_t frame = frame_for(
+    can_command_t command = {0};
+
+    const uint8_t phase_payload[] = {146u, 128u, 64u, 0u};
+    can_frame_t frame = frame_for(
         CAN_MESSAGE_SET_PHASE,
         1u,
         CAN_NODE_CONTROLLER,
         7u,
-        payload,
-        sizeof(payload));
-
-    can_command_t command = {0};
+        phase_payload,
+        sizeof(phase_payload));
     assert(can_protocol_decode_command(&frame, 1u, &command) == CAN_DECODE_OK);
     assert(command.type == CAN_MESSAGE_SET_PHASE);
     assert(command.source == CAN_NODE_CONTROLLER);
     assert(command.destination == 1u);
     assert(command.sequence == 7u);
-    assert(command.phase_state == 146u);
-    assert(command.phase_address == 3u);
+    assert(memcmp(command.phase_states, phase_payload, CAN_RF_CHANNEL_COUNT) == 0);
+
+    const uint8_t vga_payload[] = {0u, 8u, 12u, 23u};
+    frame = frame_for(
+        CAN_MESSAGE_SET_VGA,
+        1u,
+        CAN_NODE_CONTROLLER,
+        8u,
+        vga_payload,
+        sizeof(vga_payload));
+    memset(&command, 0, sizeof(command));
+    assert(can_protocol_decode_command(&frame, 1u, &command) == CAN_DECODE_OK);
+    assert(memcmp(command.attenuation_db, vga_payload, CAN_RF_CHANNEL_COUNT) == 0);
+
+    const uint8_t combined_payload[] = {
+        10u, 20u, 30u, 40u,
+        1u, 2u, 3u, 4u,
+    };
+    frame = frame_for(
+        CAN_MESSAGE_SET_COMBINED,
+        1u,
+        CAN_NODE_CONTROLLER,
+        9u,
+        combined_payload,
+        sizeof(combined_payload));
+    memset(&command, 0, sizeof(command));
+    assert(can_protocol_decode_command(&frame, 1u, &command) == CAN_DECODE_OK);
+    assert(memcmp(command.phase_states, combined_payload, CAN_RF_CHANNEL_COUNT) == 0);
+    assert(memcmp(
+        command.attenuation_db,
+        &combined_payload[CAN_RF_CHANNEL_COUNT],
+        CAN_RF_CHANNEL_COUNT) == 0);
 }
 
 static void test_broadcast_accepts_only_enter_safe(void)
 {
     can_command_t command = {0};
-
-    /* v1.1: broadcast SET_COMBINED (any non-ENTER_SAFE) is not allowed. */
-    const uint8_t combined_payload[] = {64u, 4u, 23u};
+    const uint8_t combined_payload[] = {
+        10u, 20u, 30u, 40u,
+        1u, 2u, 3u, 4u,
+    };
     const can_frame_t combined = frame_for(
         CAN_MESSAGE_SET_COMBINED,
         CAN_NODE_BROADCAST,
@@ -110,30 +141,40 @@ static void test_broadcast_accepts_only_enter_safe(void)
         8u,
         combined_payload,
         sizeof(combined_payload));
-    assert(can_protocol_decode_command(&combined, 5u, &command) ==
-           CAN_DECODE_BROADCAST_NOT_ALLOWED);
+    assert(can_protocol_decode_command(&combined, 5u, &command)
+        == CAN_DECODE_BROADCAST_NOT_ALLOWED);
 
-    /* Broadcast SET_PHASE / SET_VGA / PING are also rejected. */
-    const uint8_t phase_payload[] = {128u, 2u};
+    const uint8_t phase_payload[] = {128u, 64u, 32u, 16u};
     const can_frame_t phase = frame_for(
-        CAN_MESSAGE_SET_PHASE, CAN_NODE_BROADCAST, CAN_NODE_CONTROLLER, 9u,
-        phase_payload, sizeof(phase_payload));
-    assert(can_protocol_decode_command(&phase, 5u, &command) ==
-           CAN_DECODE_BROADCAST_NOT_ALLOWED);
+        CAN_MESSAGE_SET_PHASE,
+        CAN_NODE_BROADCAST,
+        CAN_NODE_CONTROLLER,
+        9u,
+        phase_payload,
+        sizeof(phase_payload));
+    assert(can_protocol_decode_command(&phase, 5u, &command)
+        == CAN_DECODE_BROADCAST_NOT_ALLOWED);
 
     const can_frame_t ping = frame_for(
-        CAN_MESSAGE_PING, CAN_NODE_BROADCAST, CAN_NODE_CONTROLLER, 10u,
-        NULL, 0u);
-    assert(can_protocol_decode_command(&ping, 5u, &command) ==
-           CAN_DECODE_BROADCAST_NOT_ALLOWED);
+        CAN_MESSAGE_PING,
+        CAN_NODE_BROADCAST,
+        CAN_NODE_CONTROLLER,
+        10u,
+        NULL,
+        0u);
+    assert(can_protocol_decode_command(&ping, 5u, &command)
+        == CAN_DECODE_BROADCAST_NOT_ALLOWED);
 
-    /* Broadcast ENTER_SAFE remains accepted. */
     const uint8_t safe_payload[] = {0u};
     const can_frame_t safe = frame_for(
-        CAN_MESSAGE_ENTER_SAFE, CAN_NODE_BROADCAST, CAN_NODE_CONTROLLER, 11u,
-        safe_payload, sizeof(safe_payload));
+        CAN_MESSAGE_ENTER_SAFE,
+        CAN_NODE_BROADCAST,
+        CAN_NODE_CONTROLLER,
+        11u,
+        safe_payload,
+        sizeof(safe_payload));
     assert(can_protocol_decode_command(&safe, 5u, &command) == CAN_DECODE_OK);
-    assert(command.phase_address == 0u);
+    assert(command.safe_channel == 0u);
 }
 
 static void test_decode_ignores_other_nodes_and_non_commands(void)
@@ -152,75 +193,75 @@ static void test_decode_ignores_other_nodes_and_non_commands(void)
     frame.id = 0x123u;
     assert(can_protocol_decode_command(&frame, 1u, &command) == CAN_DECODE_INVALID_ID);
 
-    frame = frame_for(
-        CAN_MESSAGE_PING,
-        1u,
-        CAN_NODE_CONTROLLER,
-        1u,
-        NULL,
-        0u);
+    frame = frame_for(CAN_MESSAGE_PING, 1u, CAN_NODE_CONTROLLER, 1u, NULL, 0u);
     frame.remote = true;
     assert(can_protocol_decode_command(&frame, 1u, &command) == CAN_DECODE_INVALID_ID);
 
-    frame = frame_for(
-        CAN_MESSAGE_STATUS,
-        1u,
-        CAN_NODE_CONTROLLER,
-        1u,
-        NULL,
-        0u);
-    assert(can_protocol_decode_command(&frame, 1u, &command) == CAN_DECODE_UNSUPPORTED_TYPE);
+    frame = frame_for(CAN_MESSAGE_STATUS, 1u, CAN_NODE_CONTROLLER, 1u, NULL, 0u);
+    assert(can_protocol_decode_command(&frame, 1u, &command)
+        == CAN_DECODE_UNSUPPORTED_TYPE);
 }
 
 static void test_decode_validates_lengths_and_payloads(void)
 {
     can_command_t command = {0};
-    const uint8_t phase_payload[] = {1u, 16u};
+
+    const uint8_t short_phase[] = {1u, 2u, 3u};
     can_frame_t frame = frame_for(
         CAN_MESSAGE_SET_PHASE,
         1u,
-        0u,
+        CAN_NODE_CONTROLLER,
         1u,
-        phase_payload,
-        sizeof(phase_payload));
-    assert(can_protocol_decode_command(&frame, 1u, &command) == CAN_DECODE_INVALID_PAYLOAD);
+        short_phase,
+        sizeof(short_phase));
+    assert(can_protocol_decode_command(&frame, 1u, &command)
+        == CAN_DECODE_INVALID_LENGTH);
 
-    const uint8_t vga_payload[] = {24u};
+    const uint8_t bad_vga[] = {0u, 8u, 24u, 23u};
     frame = frame_for(
         CAN_MESSAGE_SET_VGA,
         1u,
-        0u,
-        1u,
-        vga_payload,
-        sizeof(vga_payload));
-    assert(can_protocol_decode_command(&frame, 1u, &command) == CAN_DECODE_INVALID_PAYLOAD);
+        CAN_NODE_CONTROLLER,
+        2u,
+        bad_vga,
+        sizeof(bad_vga));
+    assert(can_protocol_decode_command(&frame, 1u, &command)
+        == CAN_DECODE_INVALID_PAYLOAD);
 
-    const uint8_t combined_payload[] = {1u, 3u};
+    const uint8_t short_combined[] = {1u, 2u, 3u, 4u, 5u, 6u, 7u};
     frame = frame_for(
         CAN_MESSAGE_SET_COMBINED,
         1u,
-        0u,
-        1u,
-        combined_payload,
-        sizeof(combined_payload));
-    assert(can_protocol_decode_command(&frame, 1u, &command) == CAN_DECODE_INVALID_LENGTH);
+        CAN_NODE_CONTROLLER,
+        3u,
+        short_combined,
+        sizeof(short_combined));
+    assert(can_protocol_decode_command(&frame, 1u, &command)
+        == CAN_DECODE_INVALID_LENGTH);
 
+    const uint8_t reserved_phase[] = {1u, 2u, 3u, 4u, 0u, 0u, 0u, 1u};
+    frame = frame_for(
+        CAN_MESSAGE_SET_PHASE,
+        1u,
+        CAN_NODE_CONTROLLER,
+        4u,
+        reserved_phase,
+        sizeof(reserved_phase));
+    assert(can_protocol_decode_command(&frame, 1u, &command)
+        == CAN_DECODE_RESERVED_BYTES);
+
+    const uint8_t nonzero[] = {1u};
     frame = frame_for(
         CAN_MESSAGE_PING,
         1u,
-        0u,
-        1u,
-        vga_payload,
-        1u);
-    assert(can_protocol_decode_command(&frame, 1u, &command) == CAN_DECODE_RESERVED_BYTES);
+        CAN_NODE_CONTROLLER,
+        5u,
+        nonzero,
+        sizeof(nonzero));
+    assert(can_protocol_decode_command(&frame, 1u, &command)
+        == CAN_DECODE_RESERVED_BYTES);
 
-    frame = frame_for(
-        CAN_MESSAGE_PING,
-        1u,
-        2u,
-        1u,
-        NULL,
-        0u);
+    frame = frame_for(CAN_MESSAGE_PING, 1u, 2u, 6u, NULL, 0u);
     assert(can_protocol_decode_command(&frame, 1u, &command) == CAN_DECODE_INVALID_ID);
 }
 
@@ -231,14 +272,25 @@ static void test_safe_and_ping_commands(void)
     can_frame_t frame = frame_for(
         CAN_MESSAGE_ENTER_SAFE,
         1u,
-        0u,
+        CAN_NODE_CONTROLLER,
         9u,
         safe_payload,
         sizeof(safe_payload));
     assert(can_protocol_decode_command(&frame, 1u, &command) == CAN_DECODE_OK);
-    assert(command.phase_address == 3u);
+    assert(command.safe_channel == 3u);
 
-    frame = frame_for(CAN_MESSAGE_PING, 1u, 0u, 10u, NULL, 0u);
+    const uint8_t invalid_safe[] = {4u};
+    frame = frame_for(
+        CAN_MESSAGE_ENTER_SAFE,
+        1u,
+        CAN_NODE_CONTROLLER,
+        10u,
+        invalid_safe,
+        sizeof(invalid_safe));
+    assert(can_protocol_decode_command(&frame, 1u, &command)
+        == CAN_DECODE_INVALID_PAYLOAD);
+
+    frame = frame_for(CAN_MESSAGE_PING, 1u, CAN_NODE_CONTROLLER, 11u, NULL, 0u);
     assert(can_protocol_decode_command(&frame, 1u, &command) == CAN_DECODE_OK);
     assert(command.type == CAN_MESSAGE_PING);
 }
@@ -277,7 +329,7 @@ static void test_response_builders(void)
     const can_status_payload_t status = {
         .node_id = 1u,
         .phase_state = 146u,
-        .phase_address = 3u,
+        .phase_address = 1u,
         .attenuation_db = 23u,
         .health_flags = CAN_HEALTH_CLOCK_FALLBACK,
         .rx_dropped = 300u,
@@ -285,14 +337,22 @@ static void test_response_builders(void)
     };
     assert(can_protocol_make_status(1u, 0u, 44u, &status, &response));
     assert(response.length == 8u);
-    assert(response.data[0] == CAN_PROTOCOL_VERSION);
+    assert(response.data[0] == CAN_PROTOCOL_VERSION_MAJOR);
     assert(response.data[1] == 1u);
     assert(response.data[2] == 146u);
-    assert(response.data[3] == 3u);
+    assert(response.data[3] == 1u);
     assert(response.data[4] == 23u);
     assert(response.data[5] == CAN_HEALTH_CLOCK_FALLBACK);
-    assert(response.data[6] == 44u);   /* 300 & 0xff */
+    assert(response.data[6] == 44u);
     assert(response.data[7] == 2u);
+
+    assert(can_protocol_make_protocol_info_status(1u, 0u, 45u, &response));
+    assert(response.data[0] == CAN_STATUS_SUBTYPE_PROTOCOL_INFO);
+    assert(response.data[1] == CAN_PROTOCOL_VERSION_MAJOR);
+    assert(response.data[2] == CAN_PROTOCOL_VERSION_MINOR);
+    assert(response.data[3] == CAN_PROTOCOL_VERSION_PATCH);
+    assert(response.data[4] == (CAN_PROTOCOL_FEATURE_FLAGS & 0xffu));
+    assert(response.data[5] == (CAN_PROTOCOL_FEATURE_FLAGS >> 8u));
 }
 
 int main(void)
@@ -300,7 +360,7 @@ int main(void)
     test_identifier_round_trip();
     test_identifier_rejects_invalid_fields();
     test_safe_command_has_highest_command_arbitration_priority();
-    test_decode_phase_command();
+    test_decode_bulk_commands();
     test_broadcast_accepts_only_enter_safe();
     test_decode_ignores_other_nodes_and_non_commands();
     test_decode_validates_lengths_and_payloads();

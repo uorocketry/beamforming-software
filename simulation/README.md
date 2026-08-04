@@ -26,7 +26,7 @@ make simulation-test
 The test builds node-1 firmware, starts the stack, and verifies:
 
 - dashboard liveness and readiness;
-- protocol v1.1 discovery;
+- protocol v2.0 discovery;
 - phase, VGA, combined, and safe CAN transactions;
 - ACK responses from the real STM32 ELF;
 - complete SPI data-register values; and

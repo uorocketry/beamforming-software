@@ -13,14 +13,18 @@
 
 #define CAN_SPI_TIMEOUT_MILLIS 2u
 
+_Static_assert(
+    F0480_CHANNEL_COUNT == CAN_RF_CHANNEL_COUNT,
+    "The VGA driver and CAN protocol must use the same channel count.");
+
 /* ------------------------------------------------------------------ */
-/* Protocol 1.1 replay cache (module scope).                           */
+/* Protocol 2.0 replay cache (module scope).                           */
 /*                                                                     */
 /* Stores the most recent successfully applied state-changing command  */
 /* and its ACK so a controller retry (identical wire request) replays  */
 /* the ACK without repeating the RF transition. The cache stores the   */
 /* original request frame (length + bytes) so matching is byte-for-    */
-/* byte, exactly as the v1.1 duplicate rule requires.                  */
+/* byte, exactly as the protocol duplicate rule requires.              */
 /* ------------------------------------------------------------------ */
 typedef struct can_replay_cache {
     bool valid;
@@ -271,11 +275,12 @@ static void send_status(const can_runtime_t *runtime, const can_command_t *comma
         return;
     }
 
+    /* Legacy STATUS reports a deterministic channel-0 snapshot. */
     const can_status_payload_t status = {
         .node_id = runtime->node_id,
-        .phase_state = runtime->state.phase_state,
-        .phase_address = runtime->state.phase_address,
-        .attenuation_db = runtime->state.attenuation_db,
+        .phase_state = runtime->state.phase_states[0],
+        .phase_address = CAN_PHASE_ADDRESS_MIN,
+        .attenuation_db = runtime->state.attenuation_db[0],
         .health_flags = health_flags(runtime),
         .rx_dropped = can_bus_rx_dropped(),
         .invalid_commands = runtime->invalid_commands,
@@ -310,19 +315,14 @@ static void send_protocol_info_status(
     }
 }
 
-static void send_cached_response(const can_frame_t *frame)
-{
-    if (frame == NULL) {
-        return;
-    }
-    send_frame_if_possible(frame, CAN_TX_PRIORITY_ACK);
-}
-
 static void apply_operation(can_runtime_t *runtime, const can_control_operation_t *operation)
 {
     if (operation->type == CAN_CONTROL_OPERATION_VGA) {
         const uint8_t command = (uint8_t)operation->command;
-        const spi_guard_status_t status = vga_write(command, CAN_SPI_TIMEOUT_MILLIS);
+        const spi_guard_status_t status = vga_write(
+            operation->channel,
+            command,
+            CAN_SPI_TIMEOUT_MILLIS);
         if (status != SPI_GUARD_OK) {
             firmware_fail(vga_fault_from_status(status));
         }
@@ -360,10 +360,14 @@ bool can_runtime_start(
     if (runtime == NULL
         || initial_state == NULL
         || node_id < CAN_NODE_MIN
-        || node_id > CAN_NODE_MAX
-        || initial_state->phase_address > CAN_PHASE_ADDRESS_MAX
-        || initial_state->attenuation_db > CAN_VGA_ATTENUATION_MAX_DB) {
+        || node_id > CAN_NODE_MAX) {
         return false;
+    }
+
+    for (uint8_t channel = 0u; channel < CAN_RF_CHANNEL_COUNT; ++channel) {
+        if (initial_state->attenuation_db[channel] > CAN_VGA_ATTENUATION_MAX_DB) {
+            return false;
+        }
     }
 
     memset(runtime, 0, sizeof(*runtime));
@@ -408,7 +412,7 @@ bool can_runtime_service_next(can_runtime_t *runtime)
         replay_cache_lookup(&command, &frame, &cached_response);
 
     if (replay_result == CAN_REPLAY_HIT) {
-        send_cached_response(&cached_response);
+        send_frame_if_possible(&cached_response, CAN_TX_PRIORITY_ACK);
         return true;
     }
     if (replay_result == CAN_REPLAY_SEQUENCE_REUSE) {
@@ -418,7 +422,7 @@ bool can_runtime_service_next(can_runtime_t *runtime)
     }
 
     if (command.type == CAN_MESSAGE_PING) {
-        /* Send the legacy STATUS first so v1.0 controllers see what they expect. */
+        /* Send the fixed-width STATUS snapshot before the protocol-info frame. */
         send_status(runtime, &command);
         if (can_protocol_is_discovery_ping(&command)) {
             send_protocol_info_status(runtime, &command);

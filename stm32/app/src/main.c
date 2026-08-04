@@ -19,7 +19,6 @@
 #define SPI_TIMEOUT_MILLIS 2u
 #define OPERATIONAL_PHASE_MILLIDEGREES 205300u
 #define SAFE_PHASE_MILLIDEGREES 0u
-#define PHASE_SHIFTER_ADDRESS 3u
 #define SAFE_VGA_ATTENUATION_DB 23u
 #define FIRMWARE_RESET_FLAG_MASK 0xfe000000u
 
@@ -100,25 +99,38 @@ int main(void)
     }
 
     const optimizedPhaseState_e phaseState = GetOptimizedPhaseState(phase_state);
-    const uint16_t phase_command = MakePSCommand(phaseState, PHASE_SHIFTER_ADDRESS);
+    uint16_t phase_command = 0u;
 
-    diagnostics_set_commands(phase_command, vga_command);
-
-    spi_guard_status_t status = vga_write(vga_command, SPI_TIMEOUT_MILLIS);
-    if (status != SPI_GUARD_OK) {
-        firmware_fail(vga_fault_from_status(status));
+    spi_guard_status_t status = SPI_GUARD_OK;
+    for (uint8_t channel = 0u; channel < CAN_RF_CHANNEL_COUNT; ++channel) {
+        status = vga_write(channel, vga_command, SPI_TIMEOUT_MILLIS);
+        if (status != SPI_GUARD_OK) {
+            firmware_fail(vga_fault_from_status(status));
+        }
     }
     diagnostics_set_state(FIRMWARE_STATE_SAFE_OUTPUTS);
 
-    status = phase_shifter_write(phase_command, SPI_TIMEOUT_MILLIS);
-    if (status != SPI_GUARD_OK) {
-        firmware_fail(phase_fault_from_status(status));
+    /* Program the same startup phase into PE44820 addresses 1 through 4. */
+    for (uint8_t channel = 0u; channel < CAN_RF_CHANNEL_COUNT; ++channel) {
+        const uint8_t phaseAddress =
+            (uint8_t)(CAN_PHASE_ADDRESS_MIN + channel);
+        phase_command = MakePSCommand(phaseState, phaseAddress);
+        status = phase_shifter_write(phase_command, SPI_TIMEOUT_MILLIS);
+        if (status != SPI_GUARD_OK) {
+            firmware_fail(phase_fault_from_status(status));
+        }
     }
 
+    diagnostics_set_commands(phase_command, vga_command);
+
     const can_control_state_t initial_state = {
-        .phase_state = phase_state,
-        .phase_address = PHASE_SHIFTER_ADDRESS,
-        .attenuation_db = SAFE_VGA_ATTENUATION_DB,
+        .phase_states = {phase_state, phase_state, phase_state, phase_state},
+        .attenuation_db = {
+            SAFE_VGA_ATTENUATION_DB,
+            SAFE_VGA_ATTENUATION_DB,
+            SAFE_VGA_ATTENUATION_DB,
+            SAFE_VGA_ATTENUATION_DB,
+        },
     };
     can_runtime_t runtime = {0};
     if (!can_runtime_start(

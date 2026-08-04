@@ -49,8 +49,27 @@ void f0480spisetup(void)
     spi_enable(SPI1);
 }
 
-spi_guard_status_t vga_write(uint8_t command, uint32_t timeout_millis)
+spi_guard_status_t vga_write(
+    uint8_t channel,
+    uint8_t command,
+    uint32_t timeout_millis)
 {
+    if (channel >= F0480_CHANNEL_COUNT) {
+        return SPI_GUARD_INVALID_ARGUMENT;
+    }
+
+    /*
+     * Protocol 2.0 carries four independent VGA values and the control planner
+     * preserves the channel number for every write. The checked-in C board pin
+     * map, however, names only one F0480 chip-select line (PA4) and does not
+     * identify the selector pins needed to route that CS to one of four chips.
+     *
+     * Keep the channel in this API so the final PCB selector can be added here
+     * without changing the CAN/runtime layers. Until that net mapping is added,
+     * the physical transfer below still uses the documented PA4 line.
+     */
+    (void)channel;
+
     spi_guard_status_t status = spi_guard_wait_txe(SPI1, timeout_millis);
     if (status != SPI_GUARD_OK) {
         return status;

@@ -50,30 +50,27 @@ Each receiver board runs the STM32F072 firmware and has a unique CAN node addres
 
 ### RF channels and components
 
-Each board contains four RF channels, numbered `0` through `3`. A command therefore identifies:
-
-1. the receiver-board CAN node; and
-2. the channel inside that board when the operation is channel-specific.
-
+Each board contains four RF channels. The bulk phase, VGA, and combined commands provide four
+values in a fixed channel order, while `ENTER_SAFE` identifies one zero-based channel `0..3`.
 Phase shifters, amplifiers, filters, detectors, and antenna elements are components of a board,
 not CAN nodes.
 
 ## Example command path
 
 ```text
-beamctl set-phase 1 --channel 2 --state 128
+beamctl set-phase 1 --states 128 64 32 16
         |
-        | CAN command to receiver node 1
+        | four phase indexes in one CAN command to receiver node 1
         v
-STM32 validates the request
+STM32 validates the complete payload before planning any hardware writes
         |
-        | SPI and GPIO transaction
+        | attenuate active outputs, then program PE44820 addresses 1..4
         v
-Phase shifter for channel 2 is programmed
+All four requested phase states are transmitted in channel order
         |
-        | CAN ACK
+        | CAN ACK after STM32-side SPI completion
         v
-Pi confirms that the command completed
+Pi confirms completion of the local transmit sequence
 ```
 
 ## What was added beyond the original STM32 prototype

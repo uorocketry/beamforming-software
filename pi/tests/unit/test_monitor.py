@@ -15,7 +15,7 @@ FLAGS = P.FEATURE_FLAGS
 class FakeClient:
     def discover(self, destination: int) -> tuple[bytes, ProtocolInfo | None]:
         if destination == 1:
-            return bytes([1, 1, 0, 0, 0, 0, 0, 0]), ProtocolInfo(1, 1, 0, P.FEATURE_FLAGS, 1)
+            return bytes([2, 1, 0, 1, 0, 0, 0, 0]), ProtocolInfo(2, 0, 0, P.FEATURE_FLAGS, 1)
         raise BeamControlError(f"no STATUS from node {destination}")
 
 
@@ -64,25 +64,25 @@ def test_monitor_keeps_dashboard_available_when_can_cannot_open() -> None:
     assert can_status["error"] == "can0 does not exist"
 
 
-def test_v10_no_protocol_info_rejected() -> None:
+def test_missing_protocol_info_rejected() -> None:
     assert configured_node_failure(3, None) is not None
 
 
-def test_v10_with_info_rejected() -> None:
-    assert configured_node_failure(3, ProtocolInfo(1, 0, 0, FLAGS, 3)) is not None
+def test_v1_rejected() -> None:
+    assert configured_node_failure(3, ProtocolInfo(1, 9, 0, FLAGS, 3)) is not None
 
 
-def test_v20_rejected() -> None:
-    assert configured_node_failure(3, ProtocolInfo(2, 0, 0, FLAGS, 3)) is not None
+def test_v3_rejected() -> None:
+    assert configured_node_failure(3, ProtocolInfo(3, 0, 0, FLAGS, 3)) is not None
 
 
-def test_v11_accepted() -> None:
-    assert configured_node_failure(3, ProtocolInfo(1, 1, 0, FLAGS, 3)) is None
+def test_v20_accepted() -> None:
+    assert configured_node_failure(3, ProtocolInfo(2, 0, 0, FLAGS, 3)) is None
 
 
-def test_v12_accepted() -> None:
-    assert configured_node_failure(3, ProtocolInfo(1, 2, 0, FLAGS, 3)) is None
+def test_v21_accepted() -> None:
+    assert configured_node_failure(3, ProtocolInfo(2, 1, 0, FLAGS, 3)) is None
 
 
 def test_missing_features_rejected() -> None:
-    assert configured_node_failure(3, ProtocolInfo(1, 1, 0, 0, 3)) is not None
+    assert configured_node_failure(3, ProtocolInfo(2, 0, 0, 0, 3)) is not None

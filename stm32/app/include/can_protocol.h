@@ -10,8 +10,8 @@
  * CAN_PROTOCOL_VERSION is retained because the legacy STATUS payload places
  * the major protocol version in byte 0.
  */
-#define CAN_PROTOCOL_VERSION_MAJOR 1u
-#define CAN_PROTOCOL_VERSION_MINOR 1u
+#define CAN_PROTOCOL_VERSION_MAJOR 2u
+#define CAN_PROTOCOL_VERSION_MINOR 0u
 #define CAN_PROTOCOL_VERSION_PATCH 0u
 #define CAN_PROTOCOL_VERSION CAN_PROTOCOL_VERSION_MAJOR
 
@@ -46,13 +46,14 @@
 /*
  * BeamControl has four physical RF channels.
  *
- * Keep CAN_PHASE_ADDRESS_MAX as a compatibility alias so existing code in
- * can_control.c does not need to change.
+ * CAN payload arrays use channel indexes 0..3. The PE44820 unit addresses used
+ * on the receiver board are 1..4, matching the CANDev implementation.
  */
 #define CAN_RF_CHANNEL_MIN 0u
 #define CAN_RF_CHANNEL_MAX 3u
 #define CAN_RF_CHANNEL_COUNT 4u
-#define CAN_PHASE_ADDRESS_MAX CAN_RF_CHANNEL_MAX
+#define CAN_PHASE_ADDRESS_MIN 1u
+#define CAN_PHASE_ADDRESS_MAX 4u
 
 #define CAN_VGA_ATTENUATION_MAX_DB 23u
 
@@ -69,9 +70,9 @@
  * fixed-width, zero-padded frames.
  */
 #define CAN_ENTER_SAFE_USED_LENGTH 1u
-#define CAN_SET_COMBINED_USED_LENGTH 3u
-#define CAN_SET_PHASE_USED_LENGTH 2u
-#define CAN_SET_VGA_USED_LENGTH 1u
+#define CAN_SET_COMBINED_USED_LENGTH 8u
+#define CAN_SET_PHASE_USED_LENGTH 4u
+#define CAN_SET_VGA_USED_LENGTH 4u
 #define CAN_PING_USED_LENGTH 0u
 
 #define CAN_ACK_LENGTH 2u
@@ -79,16 +80,16 @@
 #define CAN_STATUS_LENGTH 8u
 
 /*
- * Legacy STATUS byte 0 contains CAN_PROTOCOL_VERSION, currently 0x01.
+ * The fixed-width STATUS byte 0 contains the protocol major version, now 2.
  *
  * Values 0xf0 through 0xff are reserved for explicitly subtyped STATUS
- * messages. Protocol 1.1 defines 0xf0 as PROTOCOL_INFO.
+ * messages. Subtype 0xf0 is PROTOCOL_INFO.
  */
 #define CAN_STATUS_SUBTYPE_PROTOCOL_INFO 0xf0u
 
 typedef enum can_protocol_feature {
     /*
-     * Commands containing a phase/channel address accept only channels 0-3.
+     * ENTER_SAFE accepts only zero-based RF channel indexes 0-3.
      */
     CAN_PROTOCOL_FEATURE_STRICT_CHANNELS =
         1u << 0,
@@ -133,7 +134,13 @@ typedef enum can_protocol_feature {
      * STATUS values 0xf0-0xff are interpreted as explicit subtypes.
      */
     CAN_PROTOCOL_FEATURE_STATUS_SUBTYPES =
-        1u << 7
+        1u << 7,
+
+    /*
+     * SET_PHASE, SET_VGA and SET_COMBINED carry all four RF channels.
+     */
+    CAN_PROTOCOL_FEATURE_BULK_RF_UPDATE =
+        1u << 8
 } can_protocol_feature_t;
 
 #define CAN_PROTOCOL_FEATURE_FLAGS                         \
@@ -144,7 +151,8 @@ typedef enum can_protocol_feature {
                 CAN_PROTOCOL_FEATURE_PROTOCOL_INFO |             \
                 CAN_PROTOCOL_FEATURE_SAFE_TRANSITIONS |          \
                 CAN_PROTOCOL_FEATURE_TERMINAL_RESPONSE |         \
-                CAN_PROTOCOL_FEATURE_STATUS_SUBTYPES))
+                CAN_PROTOCOL_FEATURE_STATUS_SUBTYPES |            \
+                CAN_PROTOCOL_FEATURE_BULK_RF_UPDATE))
 
 typedef enum can_message_type {
     CAN_MESSAGE_ENTER_SAFE = 0,
@@ -168,8 +176,7 @@ typedef enum can_decode_result {
     CAN_DECODE_UNSUPPORTED_TYPE = 6,
 
     /*
-     * Added in protocol 1.1. Append-only: existing numeric values above stay
-     * unchanged.
+     * Append-only result values: existing numeric values above stay unchanged.
      */
     CAN_DECODE_RESERVED_BYTES = 7,
     CAN_DECODE_BROADCAST_NOT_ALLOWED = 8
@@ -183,9 +190,7 @@ typedef enum can_command_result {
     CAN_COMMAND_RESULT_HARDWARE = 4,
     CAN_COMMAND_RESULT_BUSY = 5,
 
-    /*
-     * Added in protocol 1.1.
-     */
+    /* Additional protocol validation/runtime results. */
     CAN_COMMAND_RESULT_RESERVED_BYTES = 6,
     CAN_COMMAND_RESULT_SEQUENCE_REUSE = 7,
     CAN_COMMAND_RESULT_BROADCAST_NOT_ALLOWED = 8
@@ -215,9 +220,12 @@ typedef struct can_command {
     uint8_t source;
     uint16_t sequence;
 
-    uint8_t phase_state;
-    uint8_t phase_address;
-    uint8_t attenuation_db;
+    /* Fixed order: array index 0..3 maps to RF channel / PE44820 address 1..4. */
+    uint8_t phase_states[CAN_RF_CHANNEL_COUNT];
+    uint8_t attenuation_db[CAN_RF_CHANNEL_COUNT];
+
+    /* ENTER_SAFE remains a one-channel command and uses a zero-based index. */
+    uint8_t safe_channel;
 } can_command_t;
 
 typedef struct can_status_payload {

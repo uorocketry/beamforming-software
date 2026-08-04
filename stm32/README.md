@@ -27,7 +27,7 @@ The firmware:
 - starts in maximum attenuation;
 - accepts CAN commands only from controller node `0`;
 - applies safe phase transitions by attenuating before changing phase;
-- sends ACK, ERROR, and STATUS responses defined by protocol v1.1;
+- sends ACK, ERROR, and STATUS responses defined by protocol v2.0;
 - filters frames for its own node ID or broadcast address `31`;
 - records retained reset and fault diagnostics; and
 - enters safe lockout after repeated incomplete boots of the same image.

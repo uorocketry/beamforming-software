@@ -81,15 +81,19 @@ def main() -> int:
     try:
         client = BeamControlClient(transport, timeout=0.5, retries=2)
         legacy, info = client.discover(1)
-        assert legacy[0] == 1 and legacy[1] == 1
+        assert legacy[0] == P.PROTOCOL_MAJOR and legacy[1] == 1
         assert info is not None
-        assert (info.major, info.minor, info.patch) == (1, 1, 0)
+        assert (info.major, info.minor, info.patch) == (2, 0, 0)
         assert info.node_id == 1
         assert info.feature_flags == P.FEATURE_FLAGS
 
-        assert client.set_phase(1, 128, 2) == bytes([P.SET_PHASE, P.RES_OK])
-        assert client.set_vga(1, 8) == bytes([P.SET_VGA, P.RES_OK])
-        assert client.set_combined(1, 64, 1, 12) == bytes([P.SET_COMBINED, P.RES_OK])
+        assert client.set_phase(1, [128, 64, 32, 16]) == bytes([P.SET_PHASE, P.RES_OK])
+        assert client.set_vga(1, [8, 9, 10, 11]) == bytes([P.SET_VGA, P.RES_OK])
+        assert client.set_combined(
+            1,
+            [64, 65, 66, 67],
+            [12, 13, 14, 15],
+        ) == bytes([P.SET_COMBINED, P.RES_OK])
         assert client.enter_safe(1, 1) == bytes([P.ENTER_SAFE, P.RES_OK])
     finally:
         transport.close()
@@ -100,24 +104,52 @@ def main() -> int:
     assert snapshot["configuration"]["target_nodes"] == [1]
     assert snapshot["nodes"][0]["node_id"] == 1
     assert snapshot["nodes"][0]["health"] == "healthy"
-    assert snapshot["nodes"][0]["protocol_version"] == "1.1.0"
+    assert snapshot["nodes"][0]["protocol_version"] == "2.0.0"
 
-    text = wait_for_log("SIM_SPI2 offset=0xC value=0x8")
+    text = wait_for_log("SIM_SPI2 offset=0xC value=0x1628")
 
-    # Actual STM32 data-register writes. These include startup, a direct phase
-    # change, a combined safe transition, and ENTER_SAFE.
+    # Actual STM32 data-register writes. The expected order mirrors the
+    # control planner comments: startup, bulk phase, bulk VGA, combined safe
+    # transition, and finally one-channel ENTER_SAFE.
     assert_subsequence(
         values(text, "SPI1", 0xC),
-        [0x5C, 0x20, 0x5C, 0x30, 0x5C],
+        [
+            0x5C,
+            0x5C,
+            0x5C,
+            0x5C,  # startup: 23 dB requested for channels 1..4
+            0x20,
+            0x24,
+            0x28,
+            0x2C,  # SET_VGA: 8, 9, 10, 11 dB
+            0x5C,
+            0x5C,
+            0x5C,
+            0x5C,  # SET_COMBINED stage 1: maximum attenuation
+            0x30,
+            0x34,
+            0x38,
+            0x3C,  # SET_COMBINED stage 3: 12, 13, 14, 15 dB
+            0x5C,  # ENTER_SAFE channel 2
+        ],
         "VGA SPI writes",
     )
     assert_subsequence(
         values(text, "SPI2", 0xC),
         [
-            0x162C,  # startup: calibrated state 146, address 3
-            0x17C4,  # SET_PHASE: calibrated state 128, address 2
-            0x0058,  # SET_COMBINED: calibrated state 64, address 1
-            0x0008,  # ENTER_SAFE: calibrated state 0, address 1
+            0x1628,
+            0x1624,
+            0x162C,
+            0x1622,  # startup: calibrated state 146, addresses 1..4
+            0x17C8,
+            0x0054,
+            0x008C,
+            0x0102,  # SET_PHASE: states 128, 64, 32, 16
+            0x0058,
+            0x0F94,
+            0x085C,
+            0x1852,  # SET_COMBINED: states 64, 65, 66, 67
+            0x0004,  # ENTER_SAFE: state 0, address 2
         ],
         "phase-shifter SPI writes",
     )
@@ -132,8 +164,8 @@ def main() -> int:
 
     print("BeamControl virtual end-to-end test passed")
     print("  real Python controller and FastAPI dashboard: healthy")
-    print("  real STM32F072 ELF in Renode: protocol v1.1 node 1")
-    print("  SocketCAN round trips: discover, phase, VGA, combined, safe")
+    print("  real STM32F072 ELF in Renode: protocol v2.0 node 1")
+    print("  SocketCAN round trips: discover, bulk phase, bulk VGA, combined, safe")
     print("  SPI/GPIO transaction sequence: verified")
     return 0
 

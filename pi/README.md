@@ -33,13 +33,14 @@ Development installs the package only in `pi/.venv`; it does not register a syst
 ```bash
 beamctl discover
 beamctl ping 1
-beamctl set-phase 1 --channel 2 --state 128
-beamctl set-vga 1 --attenuation 23
+beamctl set-phase 1 --states 128 64 32 16
+beamctl set-vga 1 --attenuations 8 9 10 11
+beamctl set-combined 1 --states 64 65 66 67 --attenuations 12 13 14 15
 beamctl enter-safe 1 --channel 2
 ```
 
-The first number is the receiver-board CAN node. `--channel` selects a local RF channel on
-that board.
+The first number is the receiver-board CAN node. Bulk commands require four values in channel
+order. `--channel` is used only by the one-channel safe command.
 
 ## Web dashboard
 

@@ -54,8 +54,8 @@ class EventRecord:
 def configured_node_failure(node: int, info: ProtocolInfo | None) -> str | None:
     """Return why a receiver node fails the production protocol gate."""
     if info is None:
-        return f"receiver node {node} does not support protocol v1.1"
-    if info.major != 1 or info.minor < 1:
+        return f"receiver node {node} does not support protocol v2.0"
+    if info.major != P.PROTOCOL_MAJOR or info.minor < P.PROTOCOL_MINOR:
         return (
             f"receiver node {node} has incompatible protocol version "
             f"{info.major}.{info.minor}.{info.patch}"
