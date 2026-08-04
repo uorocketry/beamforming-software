@@ -2,7 +2,7 @@
 
 #include "can/bus.h"
 #include "can/protocol.h"
-#include "platform/diagnostics.h"
+#include "platform/retained_diagnostics.h"
 #include "rf/execute.h"
 
 #include <limits.h>
@@ -352,7 +352,7 @@ bool can_runtime_service_next(can_runtime_t *runtime)
         &runtime->last_phase_command,
         &runtime->last_vga_command);
     runtime->state = plan.resulting_state;
-    diagnostics_set_commands(
+    retained_diagnostics_set_commands(
         runtime->last_phase_command,
         runtime->last_vga_command);
 

@@ -21,7 +21,7 @@ CFILES := \
 	src/platform/build_info.c \
 	src/platform/clock.c \
 	src/platform/diagnostic_record.c \
-	src/platform/diagnostics.c \
+	src/platform/retained_diagnostics.c \
 	src/platform/faults.c \
 	src/platform/spi_guard.c \
 	src/platform/timebase.c \

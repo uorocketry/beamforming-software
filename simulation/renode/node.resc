@@ -10,7 +10,7 @@ sysbus SetHookBeforePeripheralWrite sysbus.gpioPortA "machine.Log(LogLevel.Info,
 sysbus SetHookBeforePeripheralWrite sysbus.gpioPortB "machine.Log(LogLevel.Info, 'SIM_GPIOB offset=0x{0:X} value=0x{1:X}', offset, value)"
 sysbus SetHookBeforePeripheralWrite sysbus.gpioPortC "machine.Log(LogLevel.Info, 'SIM_GPIOC offset=0x{0:X} value=0x{1:X}', offset, value)"
 
-cpu AddHook `sysbus GetSymbolAddress "diagnostics_mark_healthy"` "machine.Log(LogLevel.Info, 'SIM_FIRMWARE_READY node=1')"
+cpu AddHook `sysbus GetSymbolAddress "retained_diagnostics_mark_healthy"` "machine.Log(LogLevel.Info, 'SIM_FIRMWARE_READY node=1')"
 cpu AddHook `sysbus GetSymbolAddress "cec_can_isr"` "machine.Log(LogLevel.Debug, 'SIM_CAN_ISR')"
 
 emulation CreateCANHub "canHub"

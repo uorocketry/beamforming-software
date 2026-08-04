@@ -10,7 +10,7 @@ stm32/tests/test_build_info
 stm32/tests/test_can_protocol
 stm32/tests/test_can_rx_queue
 stm32/tests/test_can_tx_queue
-stm32/tests/test_diagnostics
+stm32/tests/test_diagnostic_record
 stm32/tests/test_protocol_vectors
 stm32/tests/test_rf_commands
 stm32/tests/test_rf_plan

@@ -5,7 +5,7 @@ Bare-metal C/libopencm3 firmware for STM32F072R8T6. Each board is one CAN node (
 ## Behavior
 
 - 48 MHz clock with bounded HSI48 fallback
-- watchdog and retained fault/reset diagnostics
+- watchdog and retained fault/reset record
 - safe maximum-attenuation startup
 - CAN protocol 2.1 from controller node `0`
 - individual and bulk phase/VGA updates
@@ -25,6 +25,8 @@ make firmware-size NODE=1
 
 ```bash
 make stm32-test
+make stm32-sanitize
+make stm32-static
 make check
 ```
 
@@ -62,7 +64,7 @@ flowchart LR
 
     subgraph platform["platform/"]
         board["board pins"]
-        support["clock, time, watchdog, faults, diagnostics"]
+        support["clock, time, watchdog, faults, retained diagnostics"]
     end
 
     main --> runtime
@@ -80,10 +82,9 @@ flowchart LR
 app/src/main.c       startup and service loop
 app/src/can/         CAN hardware, codec, queues, runtime
 app/src/rf/          RF encoding, planning, execution, drivers
-app/src/platform/    board map, clock, time, faults, diagnostics
+app/src/platform/    board map, clock, time, faults, retained diagnostics
 app/include/         matching public headers
-bringup/             archived bench code and evidence; not compiled
 tests/               native unit and contract tests
 ```
 
-See [RF encoding](../docs/rf-control.md) and [hardware validation](docs/HARDWARE_VALIDATION.md).
+See [RF encoding](../docs/rf-control.md) and [hardware validation](../docs/hardware-validation.md).

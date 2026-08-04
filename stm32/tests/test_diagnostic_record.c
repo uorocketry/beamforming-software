@@ -90,6 +90,6 @@ int main(void)
     test_new_build_clears_old_streak();
     test_fault_and_command_history();
 
-    puts("diagnostic tests passed");
+    puts("diagnostic record tests passed");
     return 0;
 }

@@ -1,13 +1,13 @@
 #include "platform/faults.h"
 
-#include "platform/diagnostics.h"
+#include "platform/retained_diagnostics.h"
 
 #include <libopencm3/cm3/scb.h>
 #include <libopencm3/stm32/rcc.h>
 
 void firmware_fail(firmware_fault_t fault)
 {
-    diagnostics_set_fault(fault);
+    retained_diagnostics_set_fault(fault);
     scb_reset_system();
 
     while (1) {

@@ -2,7 +2,7 @@ app/build/
 app/generated.*.ld
 tests/test_rf_commands
 tests/test_rf_plan
-tests/test_diagnostics
+tests/test_diagnostic_record
 tests/test_can_protocol
 tests/test_can_rx_queue
 tests/test_can_tx_queue

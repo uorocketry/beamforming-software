@@ -2,7 +2,7 @@ CC ?= cc
 CFLAGS ?= -std=c2x -Wall -Wextra -Werror -pedantic -O2
 CPPFLAGS += -I../app/include -I../../protocol/generated
 
-TARGETS := test_rf_commands test_rf_plan test_diagnostics test_can_protocol test_can_rx_queue test_can_tx_queue test_build_info test_protocol_vectors
+TARGETS := test_rf_commands test_rf_plan test_diagnostic_record test_can_protocol test_can_rx_queue test_can_tx_queue test_build_info test_protocol_vectors
 
 .PHONY: all test test_invalid_node_config clean
 
@@ -14,7 +14,7 @@ test_rf_commands: test_rf_commands.c ../app/src/rf/commands.c ../app/include/rf/
 test_rf_plan: test_rf_plan.c ../app/src/rf/plan.c ../app/src/rf/commands.c ../app/include/rf/plan.h ../app/include/can/protocol.h ../app/include/rf/commands.h ../app/include/rf/limits.h ../app/include/rf/phase_states_2_4ghz.h
 	$(CC) $(CPPFLAGS) $(CFLAGS) $(filter %.c,$^) -o $@
 
-test_diagnostics: test_diagnostics.c ../app/src/platform/diagnostic_record.c ../app/include/platform/diagnostic_record.h
+test_diagnostic_record: test_diagnostic_record.c ../app/src/platform/diagnostic_record.c ../app/include/platform/diagnostic_record.h
 	$(CC) $(CPPFLAGS) $(CFLAGS) $(filter %.c,$^) -o $@
 
 test_can_protocol: test_can_protocol.c ../app/src/can/protocol.c ../app/include/can/protocol.h
@@ -35,7 +35,7 @@ test_protocol_vectors: test_protocol_vectors.c ../app/src/can/protocol.c ../app/
 test: $(TARGETS) test_invalid_node_config
 	./test_rf_commands
 	./test_rf_plan
-	./test_diagnostics
+	./test_diagnostic_record
 	./test_can_protocol
 	./test_can_rx_queue
 	./test_can_tx_queue

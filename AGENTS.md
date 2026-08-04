@@ -18,5 +18,5 @@
 
 - Keep production firmware under `stm32/app/src/{can,rf,platform}` with matching headers under `stm32/app/include/`.
 - Keep board GPIO and alternate-function assignments in `platform/board.h`.
-- Keep bench experiments and captured media under `stm32/bringup/`, not production source directories.
+- Do not track bench experiments or captured media in the software repository; store them with hardware validation records or release artifacts.
 - Name modules by responsibility: CAN transport/codec, RF planning/execution, or platform support.

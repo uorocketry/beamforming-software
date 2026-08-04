@@ -57,7 +57,9 @@ sudo apt install --yes can-utils cppcheck iproute2
 ```
 
 - `can-utils`: physical CAN inspection
-- `cppcheck`: `python3 stm32/scripts/verify.py`
+- `cppcheck`: `make stm32-static`
 - `iproute2`: configure SocketCAN links
+
+Run `make stm32-sanitize` for ASan/UBSan native tests or `make stm32-verify` for all extended firmware checks.
 
 After setup, tests and firmware builds use local caches. A fresh checkout still needs network access. Pi deployment uses an offline bundle.

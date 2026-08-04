@@ -19,8 +19,8 @@ jobs:
           enable-cache: true
       - run: uv python install 3.11
       - run: uv sync --project pi --frozen --python 3.11
-      - run: uv run --project pi --frozen ruff check pi tools stm32/scripts simulation/tests
-      - run: uv run --project pi --frozen ruff format --check pi tools stm32/scripts simulation/tests
+      - run: uv run --project pi --frozen ruff check pi tools simulation/tests
+      - run: uv run --project pi --frozen ruff format --check pi tools simulation/tests
       - run: uv run --project pi --frozen mypy pi/src/beamcontrol
       - run: uv run --project pi --frozen pytest pi/tests tools/tests --cov=beamcontrol
 
@@ -30,6 +30,10 @@ jobs:
     steps:
       - uses: actions/checkout@v4
       - run: make stm32-test
+      - run: make stm32-sanitize
+      - name: Install cppcheck
+        run: sudo apt-get update && sudo apt-get install --yes --no-install-recommends cppcheck
+      - run: make stm32-static
 
   protocol-contract:
     name: Protocol contract (Python <-> C)
