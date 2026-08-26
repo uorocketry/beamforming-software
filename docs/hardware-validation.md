@@ -2,6 +2,8 @@
 
 Run for every PCB revision and release artifact before enabling RF. Record firmware revision, ELF SHA256, board revision/serial, equipment, operator, date, and evidence.
 
+Current receiver timing configuration is a 16 MHz HSE with PLL x3 for a 48 MHz system clock. CAN uses PA11/PA12 AF4 at 500 kbit/s. HSI48 is the bounded fallback clock source when HSE startup is unavailable.
+
 ## Identification
 
 - [ ] MCU is STM32F072R8T6.

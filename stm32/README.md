@@ -4,7 +4,7 @@ Bare-metal C/libopencm3 firmware for STM32F072R8T6. Each board is one CAN node (
 
 ## Behavior
 
-- 48 MHz clock from 16 MHz HSE / PLL x3, with bounded HSI48 fallback
+- 48 MHz system clock from 16 MHz HSE / PLL x3, with bounded HSI48 fallback
 - watchdog and retained fault/reset record
 - safe maximum-attenuation startup
 - CAN protocol 2.1 from controller node `0`
@@ -36,7 +36,7 @@ make check
 |:--|:--|
 | MCU | STM32F072R8T6, Cortex-M0 |
 | Flash / RAM | 64 KiB / 16 KiB |
-| Clock | 48 MHz, 16 MHz HSE / PLL x3 with HSI48 fallback |
+| Clock | 16 MHz HSE / PLL x3 -> 48 MHz system clock; HSI48 fallback |
 | CAN | 2.0B extended, 500 kbit/s, PA11/PA12 AF4 |
 | Phase bus | SPI2 |
 | VGA bus | SPI1 |

@@ -22,6 +22,8 @@ make pi-lint
 
 ## Commands
 
+Production installs expose `beamctl` through `/usr/local/bin`, which is on the normal SSH `PATH`. The CLI defaults to `beamcan0`; use `--iface` only when intentionally targeting another SocketCAN interface.
+
 ```bash
 beamctl discover
 beamctl ping 1

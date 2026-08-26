@@ -15,7 +15,7 @@ The system Python version is not part of the application contract. Other OS rele
 
 CI builds the ARM64 offline bundle with the pinned `uv` binary and uv-managed CPython 3.11 runtime, installs it without network access into a clean venv, imports `beamcontrol`, and runs `beamctl --help` and `beamd --help`.
 
-CI does not test device-tree overlays, MCP2515 hardware, physical CAN, `can0`, or systemd on the target.
+CI does not test device-tree overlays, MCP2515 hardware, the physical CAN bus, SPI-parent interface resolution, or systemd on the target.
 
 ## Flash and connect
 
@@ -79,7 +79,7 @@ ssh -t "$PI_USER@$PI_HOST" '
 
 For USB/local transfer, extract with `python3 -m tarfile -e` and run the same `install.py`.
 
-The installer validates Pi 5 + Debian 13 (`trixie`), copies the bundled uv-managed CPython 3.11 runtime under `/opt/uorocketry/python/`, and uses the bundled `uv` binary to create/install the release venv offline. Physical HAT CAN0 is resolved by its SPI parent (`spi1.1`) and renamed `beamcan0`, avoiding kernel probe-order dependence between the two MCP2515 controllers. It installs versioned application releases under `/opt/uorocketry/beamcontrol/releases/`, switches `current` atomically, and installs/enables both services. Upgrades preserve `/etc/uorocketry/beamcontrol.toml`. Production runs from the system-level `beamcontrol-can.service` and `beamcontrol.service`; do not run a separate repo/user `beamd` service on the same port.
+The installer validates Pi 5 + Debian 13 (`trixie`), copies the bundled uv-managed CPython 3.11 runtime under `/opt/uorocketry/python/`, and uses the bundled `uv` binary to create/install the release venv offline. Physical HAT CAN0 is the MCP2515 at SPI parent `spi1.1`; deployment resolves that device and exposes it as the stable application interface `beamcan0`, independent of kernel `can0`/`can1` probe order. It installs versioned application releases under `/opt/uorocketry/beamcontrol/releases/`, switches `current` atomically, exposes `beamctl` at `/usr/local/bin/beamctl`, and installs/enables both services. `beamctl` defaults to `beamcan0`, while `--iface` remains available for diagnostics. Upgrades preserve `/etc/uorocketry/beamcontrol.toml`. Production runs from the system-level `beamcontrol-can.service` and `beamcontrol.service`; do not run a separate repo/user `beamd` service on the same port.
 
 The release venv is created in a staging directory before the release is renamed into place. Python console scripts contain absolute shebangs, so the installer repairs those entrypoints after the rename and before switching `current`; preserve that ordering when changing the installer.
 
@@ -116,7 +116,7 @@ ip -details -statistics link show beamcan0
 systemctl --no-pager --full status beamcontrol-can.service
 systemctl --no-pager --full status beamcontrol.service
 sudo journalctl -u beamcontrol.service -n 100 --no-pager
-/opt/uorocketry/beamcontrol/current/venv/bin/beamctl discover
+beamctl discover
 curl --fail http://127.0.0.1:8080/healthz
 ```
 

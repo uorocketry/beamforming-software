@@ -11,6 +11,13 @@ flowchart LR
 
 One board is one CAN node. Phase shifters and DVGAs are board-local devices.
 
+Current hardware/runtime assumptions:
+
+- receiver MCU clock: 16 MHz HSE -> PLL x3 -> 48 MHz system clock; HSI48 is the bounded fallback
+- CAN: 2.0B extended frames at 500 kbit/s
+- Raspberry Pi HAT physical CAN0: SPI parent `spi1.1`, exposed to BeamControl as `beamcan0`
+- deployed operator CLI: `/usr/local/bin/beamctl`, defaulting to `beamcan0`
+
 ## Layout
 
 | Path | Purpose |
