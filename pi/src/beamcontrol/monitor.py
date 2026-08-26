@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import errno
 import logging
 import platform
 import threading
@@ -22,6 +23,8 @@ from .config import BeamControlConfig
 from .transport import SocketCanTransport
 
 log = logging.getLogger(__name__)
+
+NO_CAN_ACK_MESSAGE = "Waiting for a CAN receiver."
 
 
 class ClientLike(Protocol):
@@ -141,6 +144,8 @@ class BeamControlMonitor:
         self._cycle_ms: float | None = None
         self._nodes: dict[int, NodeRecord] = {node: NodeRecord(node) for node in config.nodes}
         self._events: deque[EventRecord] = deque(maxlen=100)
+        self._revision_condition = threading.Condition()
+        self._revision = 0
         self._record_event("info", "BeamControl monitor starting")
 
     def start(self) -> None:
@@ -161,6 +166,18 @@ class BeamControlMonitor:
         if self._thread is not None:
             self._thread.join(timeout=max(2.0, self.config.poll_interval_s + 1.0))
         self._disconnect()
+
+    def revision(self) -> int:
+        """Return the latest completed monitor-cycle revision."""
+        with self._revision_condition:
+            return self._revision
+
+    def wait_for_update(self, revision: int, timeout: float) -> int:
+        """Block until a newer monitor cycle completes or timeout expires."""
+        with self._revision_condition:
+            if self._revision == revision:
+                self._revision_condition.wait(timeout)
+            return self._revision
 
     def _run(self) -> None:
         try:
@@ -226,11 +243,19 @@ class BeamControlMonitor:
                 self._mark_node_failure(node, str(error))
             except (can.CanError, OSError) as error:
                 message = str(error) or error.__class__.__name__
+                no_bus_ack = (
+                    getattr(error, "error_code", None) == errno.ENOBUFS
+                    or getattr(error, "errno", None) == errno.ENOBUFS
+                )
+                display_message = NO_CAN_ACK_MESSAGE if no_bus_ack else message
                 with self._lock:
-                    self._can_health = "offline"
-                    self._can_error = message
-                self._record_event("error", f"CAN connection failed: {message}")
-                self._disconnect()
+                    health = "online" if no_bus_ack else "degraded"
+                    changed = self._can_health != health or self._can_error != display_message
+                    self._can_health = health
+                    self._can_error = display_message
+                if changed:
+                    event = display_message if no_bus_ack else f"SocketCAN degraded: {message}"
+                    self._record_event("warning", event)
                 break
             except Exception as error:  # A bad driver must not take down the status page.
                 message = str(error) or error.__class__.__name__
@@ -279,6 +304,9 @@ class BeamControlMonitor:
         with self._lock:
             self._last_cycle = self._wall_clock()
             self._cycle_ms = (self._clock() - cycle_started) * 1000.0
+        with self._revision_condition:
+            self._revision += 1
+            self._revision_condition.notify_all()
 
     def _record_event(self, level: str, message: str) -> None:
         with self._lock:
@@ -321,8 +349,12 @@ class BeamControlMonitor:
         online_nodes = sum(node["health"] in {"healthy", "degraded"} for node in nodes)
         healthy_nodes = sum(node["health"] == "healthy" for node in nodes)
         configured_count = len(self.config.nodes)
-        if can_health != "online":
-            overall_health = "offline" if can_health == "offline" else "starting"
+        if can_health == "offline":
+            overall_health = "offline"
+        elif can_health == "starting":
+            overall_health = "starting"
+        elif can_health == "degraded":
+            overall_health = "degraded"
         elif configured_count:
             overall_health = (
                 "healthy"
@@ -343,6 +375,8 @@ class BeamControlMonitor:
             },
             "can": {
                 "health": can_health,
+                "status": "waiting" if can_error == NO_CAN_ACK_MESSAGE else can_health,
+                "status_class": "starting" if can_error == NO_CAN_ACK_MESSAGE else can_health,
                 "channel": self.config.channel,
                 "bitrate": "500 kbit/s",
                 "sample_point": "87.5%",

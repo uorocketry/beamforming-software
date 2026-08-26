@@ -47,3 +47,29 @@ def test_rejects_other_arm64_machine(tmp_path: Path) -> None:
 def test_rejects_missing_device_tree_model(tmp_path: Path) -> None:
     with pytest.raises(RuntimeError, match="no Raspberry Pi device-tree model"):
         TARGET.validate_pi5_target(machine="arm64", model_path=tmp_path / "missing")
+
+
+def test_accepts_debian_13_trixie() -> None:
+    assert (
+        TARGET.validate_debian_trixie(
+            release={
+                "ID": "debian",
+                "VERSION_ID": "13",
+                "VERSION_CODENAME": "trixie",
+                "PRETTY_NAME": "Debian GNU/Linux 13 (trixie)",
+            }
+        )
+        == "Debian GNU/Linux 13 (trixie)"
+    )
+
+
+@pytest.mark.parametrize(
+    "release",
+    [
+        {"ID": "debian", "VERSION_ID": "12", "VERSION_CODENAME": "bookworm"},
+        {"ID": "ubuntu", "VERSION_ID": "24.04", "VERSION_CODENAME": "noble"},
+    ],
+)
+def test_rejects_non_trixie_os(release: dict[str, str]) -> None:
+    with pytest.raises(RuntimeError, match=r"requires Debian GNU/Linux 13 \(trixie\)"):
+        TARGET.validate_debian_trixie(release=release)

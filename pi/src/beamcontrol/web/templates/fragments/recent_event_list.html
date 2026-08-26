@@ -1,0 +1,5 @@
+{% for event in events %}
+<li class="{{ event.level }}"><time>{{ event.time }}</time><i></i><span>{{ event.message }}</span></li>
+{% else %}
+<li><time>—</time><i></i><span>No events yet.</span></li>
+{% endfor %}

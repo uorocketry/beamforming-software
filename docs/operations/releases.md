@@ -23,7 +23,7 @@ The workflow verifies the version, runs checks, builds and offline-smoke-tests t
 
 ## Contents
 
-- `beamcontrol-pi-<revision>.tar.gz`
+- `beamcontrol-pi-<revision>.tar.gz` — offline ARM64 bundle containing pinned `uv`, uv-managed CPython 3.11, wheelhouse, installer, configuration, and systemd units
 - `beamcontrol-pi-SHA256SUMS.txt`
 
 Build board firmware explicitly:

@@ -3,8 +3,8 @@
 from __future__ import annotations
 
 import argparse
+import os
 import subprocess
-import sys
 import tempfile
 from pathlib import Path
 
@@ -12,7 +12,7 @@ from script_support import safe_extract
 
 
 def run(command: list[str | Path]) -> None:
-    subprocess.run([str(part) for part in command], check=True)
+    subprocess.run([os.fspath(part) for part in command], check=True)
 
 
 def find_bundle_root(extracted: Path) -> Path:
@@ -22,12 +22,20 @@ def find_bundle_root(extracted: Path) -> Path:
     return roots[0]
 
 
-def smoke_test(bundle: Path) -> None:
-    if sys.version_info[:2] != (3, 11):
+def bundled_python(root: Path) -> Path:
+    candidates = [
+        directory / "bin/python3.11"
+        for directory in (root / "python").iterdir()
+        if directory.is_dir() and (directory / "bin/python3.11").is_file()
+    ]
+    if len(candidates) != 1:
         raise RuntimeError(
-            f"bundle smoke test requires Python 3.11, found {sys.version_info.major}.{sys.version_info.minor}"
+            f"expected one bundled Python 3.11 runtime, found {len(candidates)}"
         )
+    return candidates[0]
 
+
+def smoke_test(bundle: Path) -> None:
     with tempfile.TemporaryDirectory(
         prefix="beamcontrol-bundle-smoke-"
     ) as temporary_name:
@@ -43,6 +51,8 @@ def smoke_test(bundle: Path) -> None:
             root / "target_platform.py",
             root / "requirements.lock",
             root / "wheelhouse",
+            root / "uv",
+            root / "python",
             root / "systemd/beamcontrol.service",
             root / "systemd/beamcontrol-can.service",
             root / "config/beamcontrol.toml.example",
@@ -55,13 +65,34 @@ def smoke_test(bundle: Path) -> None:
                 f"bundle is missing required files: {', '.join(missing)}"
             )
 
+        uv = root / "uv"
+        python = bundled_python(root)
         environment = temporary / "venv"
-        run([sys.executable, "-m", "venv", environment])
-        pip = environment / "bin/pip"
         run(
             [
-                pip,
+                uv,
+                "venv",
+                "--python",
+                python,
+                "--no-python-downloads",
+                "--offline",
+                "--no-cache",
+                environment,
+            ]
+        )
+        environment_python = environment / "bin/python"
+        run(
+            [
+                uv,
+                "pip",
                 "install",
+                "--python",
+                environment_python,
+                "--no-python-downloads",
+                "--offline",
+                "--no-cache",
+                "--link-mode",
+                "copy",
                 "--no-index",
                 "--require-hashes",
                 "--find-links",
@@ -72,8 +103,16 @@ def smoke_test(bundle: Path) -> None:
         )
         run(
             [
-                pip,
+                uv,
+                "pip",
                 "install",
+                "--python",
+                environment_python,
+                "--no-python-downloads",
+                "--offline",
+                "--no-cache",
+                "--link-mode",
+                "copy",
                 "--no-index",
                 "--find-links",
                 root / "wheelhouse",
@@ -81,10 +120,10 @@ def smoke_test(bundle: Path) -> None:
             ]
         )
 
-        run([environment / "bin/python", "-c", "import beamcontrol"])
+        run([environment_python, "-c", "import beamcontrol"])
         run(
             [
-                environment / "bin/python",
+                environment_python,
                 "-c",
                 (
                     "from beamcontrol.config import BeamControlConfig; "

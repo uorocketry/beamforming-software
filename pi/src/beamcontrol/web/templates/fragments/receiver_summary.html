@@ -1,0 +1,12 @@
+<article id="receiver-summary" class="panel summary-card">
+  <div class="card-heading">
+    <div><span class="eyebrow">Receiver boards</span><h2 id="receiver-online">{{ node_summary.online }} online</h2></div>
+    <span id="receiver-healthy" class="health-badge {{ service.health }}">{{ node_summary.healthy }} healthy</span>
+  </div>
+  <dl class="detail-list">
+    <div><dt>Mode</dt><dd>{{ "Scan all 1–30" if configuration.scan_mode else "Configured list" }}</dd></div>
+    <div><dt>CAN scan interval</dt><dd>{{ configuration.poll_interval_s }} s</dd></div>
+    <div><dt>Monitored</dt><dd id="receiver-monitored">{{ node_summary.monitored }}</dd></div>
+    <div><dt>Known boards</dt><dd id="receiver-known">{{ node_summary.displayed }}</dd></div>
+  </dl>
+</article>

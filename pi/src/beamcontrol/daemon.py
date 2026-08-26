@@ -26,6 +26,7 @@ def run(config_path: str) -> int:
         port=cfg.web_port,
         log_level="info",
         access_log=False,
+        timeout_graceful_shutdown=3,
     )
     return 0
 

@@ -7,10 +7,9 @@ import grp
 import os
 import shutil
 import subprocess
-import sys
 from pathlib import Path
 
-from target_platform import validate_pi5_target
+from target_platform import validate_debian_trixie, validate_pi5_target
 
 
 def run(command: list[str | os.PathLike[str]], *, check: bool = True) -> None:
@@ -30,19 +29,64 @@ def switch_symlink(target: Path, link: Path) -> None:
     os.replace(temporary, link)
 
 
+def repair_venv_entrypoints(venv: Path) -> None:
+    """Rewrite console-script shebangs after the staged release directory is renamed."""
+    bindir = venv / "bin"
+    interpreter = os.fsencode(bindir / "python3.11")
+    for entrypoint in bindir.iterdir():
+        if entrypoint.is_symlink() or not entrypoint.is_file():
+            continue
+        data = entrypoint.read_bytes()
+        first_line, newline, remainder = data.partition(b"\n")
+        if newline and first_line.startswith(b"#!") and b"/venv/bin/python" in first_line:
+            entrypoint.write_bytes(b"#!" + interpreter + b"\n" + remainder)
+
+
+def bundled_python_runtime(bundle_dir: Path) -> Path:
+    """Return the single bundled uv-managed CPython 3.11 runtime."""
+    python_root = bundle_dir / "python"
+    candidates = [
+        directory
+        for directory in python_root.iterdir()
+        if directory.is_dir() and (directory / "bin/python3.11").is_file()
+    ]
+    if len(candidates) != 1:
+        raise SystemExit("error: bundle must contain exactly one uv-managed Python 3.11 runtime")
+    return candidates[0]
+
+
+def install_python_runtime(bundle_dir: Path) -> Path:
+    """Install the bundled Python runtime under /opt and return its interpreter."""
+    bundled = bundled_python_runtime(bundle_dir)
+    destination = Path("/opt/uorocketry/python") / bundled.name
+    destination.parent.mkdir(parents=True, exist_ok=True)
+    if not destination.exists():
+        staging = destination.with_name(f".{destination.name}.new")
+        shutil.rmtree(staging, ignore_errors=True)
+        shutil.copytree(bundled, staging, symlinks=True)
+        staging.replace(destination)
+    interpreter = destination / "bin/python3.11"
+    if not interpreter.is_file():
+        raise SystemExit(f"error: installed Python runtime is incomplete: {interpreter}")
+    return interpreter
+
+
 def main() -> None:
     if os.geteuid() != 0:
         raise SystemExit("error: run this installer as root, for example `sudo python3 install.py`")
 
     try:
         model = validate_pi5_target()
+        operating_system = validate_debian_trixie()
     except RuntimeError as error:
         raise SystemExit(f"error: {error}") from error
-    python_minor = f"{sys.version_info.major}.{sys.version_info.minor}"
-    if python_minor != "3.11":
-        raise SystemExit(f"error: BeamControl wheels target Python 3.11, found {python_minor}")
 
     bundle_dir = Path(__file__).resolve().parent
+    uv = bundle_dir / "uv"
+    if not uv.is_file() or not os.access(uv, os.X_OK):
+        raise SystemExit(f"error: bundled uv binary is missing or not executable: {uv}")
+    python = install_python_runtime(bundle_dir)
+
     version_file = bundle_dir / "VERSION"
     if not version_file.is_file():
         raise SystemExit(f"error: bundle VERSION file is missing: {version_file}")
@@ -61,12 +105,31 @@ def main() -> None:
     shutil.copytree(bundle_dir / "wheelhouse", staging / "wheelhouse")
     shutil.copy2(bundle_dir / "requirements.lock", staging / "requirements.lock")
 
-    run([sys.executable, "-m", "venv", staging / "venv"])
-    pip = staging / "venv/bin/pip"
     run(
         [
-            pip,
+            uv,
+            "venv",
+            "--python",
+            python,
+            "--no-python-downloads",
+            "--offline",
+            "--no-cache",
+            staging / "venv",
+        ]
+    )
+    venv_python = staging / "venv/bin/python"
+    run(
+        [
+            uv,
+            "pip",
             "install",
+            "--python",
+            venv_python,
+            "--no-python-downloads",
+            "--offline",
+            "--no-cache",
+            "--link-mode",
+            "copy",
             "--no-index",
             "--require-hashes",
             "--find-links",
@@ -77,8 +140,16 @@ def main() -> None:
     )
     run(
         [
-            pip,
+            uv,
+            "pip",
             "install",
+            "--python",
+            venv_python,
+            "--no-python-downloads",
+            "--offline",
+            "--no-cache",
+            "--link-mode",
+            "copy",
             "--no-index",
             "--find-links",
             staging / "wheelhouse",
@@ -91,6 +162,7 @@ def main() -> None:
         shutil.rmtree(staging)
     else:
         staging.replace(release_dir)
+    repair_venv_entrypoints(release_dir / "venv")
     switch_symlink(release_dir, current)
 
     install_file(
@@ -116,7 +188,7 @@ def main() -> None:
     run(["systemctl", "stop", "beamcontrol.service"], check=False)
     run(["systemctl", "restart", "beamcontrol-can.service"], check=False)
     run(["systemctl", "start", "beamcontrol.service"])
-    print(f"BeamControl controller installed on {model}: {current} ({version})")
+    print(f"BeamControl controller installed on {model}, {operating_system}: {current} ({version})")
 
 
 if __name__ == "__main__":

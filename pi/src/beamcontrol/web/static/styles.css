@@ -68,7 +68,10 @@ body { margin: 0; min-width: 320px; min-height: 100vh; color: var(--text); backg
 .detail-list div, .node-details div { min-width: 0; }
 .detail-list dt, .node-details dt { color: var(--muted); font-size: 8px; letter-spacing: .08em; text-transform: uppercase; }
 .detail-list dd, .node-details dd { margin: 3px 0 0; font: 10px ui-monospace, monospace; overflow-wrap: anywhere; }
-.card-error, .node-error { margin: 11px 0 0; color: var(--red); font-size: 9px; line-height: 1.4; }
+.card-note, .node-error { margin: 11px 0 0; font-size: 9px; line-height: 1.4; }
+.card-note { color: var(--muted); }
+.card-note.warning { color: var(--amber); }
+.node-error { color: var(--red); }
 
 .workspace-grid { display: grid; grid-template-columns: minmax(0, 1fr) 340px; gap: 0; margin-top: 18px; border-top: 1px solid var(--line); border-bottom: 1px solid var(--line); }
 .receiver-panel { padding: 16px 18px 20px 0; }

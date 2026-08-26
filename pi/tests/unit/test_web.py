@@ -8,7 +8,7 @@ from typing import Any
 
 import httpx
 
-from beamcontrol.web.server import create_app
+from beamcontrol.web.server import create_app, render_changed_updates
 
 
 class FakeMonitor:
@@ -39,6 +39,8 @@ class FakeMonitor:
             },
             "can": {
                 "health": "online",
+                "status": "online",
+                "status_class": "online",
                 "channel": "can0",
                 "bitrate": "500 kbit/s",
                 "sample_point": "87.5%",
@@ -97,18 +99,18 @@ def test_dashboard_routes_and_lifespan() -> None:
             assert response.status_code == 200
             assert "BeamControl" in response.text
             assert "Receiver boards" in response.text
-            assert 'data-refresh-url="/fragments/dashboard"' in response.text
-
-            fragment = await client.get("/fragments/dashboard")
-            assert fragment.status_code == 200
-            assert "NODE" in fragment.text
+            assert "updates every 2 seconds" not in response.text
+            assert "Live updates" not in response.text
+            assert "data-refresh-url" not in response.text
+            assert "/events" in {route.path for route in app.routes}
 
             stylesheet = await client.get("/static/styles.css")
             assert stylesheet.status_code == 200
             assert "--green" in stylesheet.text
             script = await client.get("/static/dashboard.js")
             assert script.status_code == 200
-            assert "data-refresh-url" in script.text
+            assert 'EventSource("/events")' in script.text
+            assert "setInterval" not in script.text
 
             status = await client.get("/api/status")
             assert status.status_code == 200
@@ -121,6 +123,32 @@ def test_dashboard_routes_and_lifespan() -> None:
         assert monitor.stopped
 
     run(scenario())
+
+
+def test_sse_rendering_only_returns_changed_atoms() -> None:
+    monitor = FakeMonitor()
+    first, rendered = render_changed_updates(monitor.snapshot(), {})
+    first_ids = {str(update["id"]) for update in first}
+    assert "controller-uptime" in first_ids
+    assert "controller-health" in first_ids
+    assert "can-last-scan" in first_ids
+    assert "receiver-online" in first_ids
+    assert "node-1-health" in first_ids
+    assert "receiver-board-list" in first_ids
+    assert "recent-events-list" in first_ids
+    assert "controller-summary" not in first_ids
+    assert "can-summary" not in first_ids
+
+    unchanged, rendered = render_changed_updates(monitor.snapshot(), rendered)
+    assert unchanged == []
+
+    monitor.health = "degraded"
+    changed, _ = render_changed_updates(monitor.snapshot(), rendered)
+    assert {str(update["id"]) for update in changed} == {
+        "top-boards-state",
+        "controller-health",
+        "receiver-healthy",
+    }
 
 
 def test_readiness_fails_when_monitor_is_offline() -> None:

@@ -25,6 +25,17 @@ def create_bundle(stage: Path, bundle: Path) -> None:
         archive.add(stage, arcname=stage.name)
 
 
+def managed_python_runtime(uv: Path, version: str) -> Path:
+    """Return the resolved uv-managed Python runtime root for a version."""
+    interpreter = Path(
+        command_output([uv, "python", "find", "--managed-python", version])
+    ).resolve()
+    runtime = interpreter.parents[1]
+    if not (runtime / "bin/python3.11").is_file():
+        raise ToolError(f"uv-managed Python runtime is incomplete: {runtime}")
+    return runtime
+
+
 def main() -> None:
     machine = platform.machine().lower()
     if machine not in {"aarch64", "arm64"}:
@@ -44,7 +55,12 @@ def main() -> None:
     target_python = "3.11"
 
     shutil.rmtree(stage, ignore_errors=True)
-    for directory in (stage / "wheelhouse", stage / "systemd", stage / "config"):
+    for directory in (
+        stage / "wheelhouse",
+        stage / "systemd",
+        stage / "config",
+        stage / "python",
+    ):
         directory.mkdir(parents=True, exist_ok=True)
 
     run(
@@ -75,6 +91,13 @@ def main() -> None:
     )
 
     run([uv, "python", "install", target_python])
+    runtime = managed_python_runtime(uv, target_python)
+    shutil.copytree(runtime, stage / "python" / runtime.name, symlinks=True)
+    shutil.copy2(uv, stage / "uv")
+    (stage / "uv").chmod(
+        (stage / "uv").stat().st_mode | stat.S_IXUSR | stat.S_IXGRP | stat.S_IXOTH
+    )
+
     shutil.rmtree(wheel_venv, ignore_errors=True)
     run([uv, "venv", "--python", target_python, "--seed", wheel_venv])
     run(

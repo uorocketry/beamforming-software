@@ -1,17 +1,20 @@
-async function refresh(element) {
-  if (element.dataset.refreshing) return;
-  element.dataset.refreshing = "true";
-  try {
-    const response = await fetch(element.dataset.refreshUrl, { cache: "no-store" });
-    if (!response.ok) return;
-    const template = document.createElement("template");
-    template.innerHTML = await response.text();
-    element.replaceWith(template.content.firstElementChild);
-  } finally {
-    delete element.dataset.refreshing;
-  }
-}
+const events = new EventSource("/events");
 
-setInterval(() => {
-  document.querySelectorAll("[data-refresh-url]").forEach(refresh);
-}, 2000);
+events.addEventListener("update", (event) => {
+  const update = JSON.parse(event.data);
+  const element = document.getElementById(update.id);
+  if (!element) return;
+
+  if ("text" in update && element.textContent !== update.text) {
+    element.textContent = update.text;
+  }
+  if ("className" in update && element.className !== update.className) {
+    element.className = update.className;
+  }
+  if ("hidden" in update && element.hidden !== update.hidden) {
+    element.hidden = update.hidden;
+  }
+  if ("html" in update && element.innerHTML.trim() !== update.html.trim()) {
+    element.innerHTML = update.html;
+  }
+});

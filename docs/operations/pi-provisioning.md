@@ -6,28 +6,20 @@
 |:--|:--|
 | Hardware | Raspberry Pi 5 |
 | Architecture | `aarch64` |
-| OS | Raspberry Pi OS Lite 64-bit, Bookworm |
-| Python | 3.11 |
-| Image | `2025-05-13-raspios-bookworm-arm64-lite.img.xz` |
-| SHA256 | `62d025b9bc7ca0e1facfec74ae56ac13978b6745c58177f081d39fbb8041ed45` |
+| OS | Debian GNU/Linux 13 (`trixie`) |
+| Application Python | uv-managed CPython 3.11, bundled with the release |
 
-Other OS releases require a rebuilt/requalified bundle and updated checks in `pi/deploy/provision_os.py`.
+The system Python version is not part of the application contract. Other OS releases require requalification and corresponding updates in `pi/deploy/target_platform.py`.
 
 ## CI coverage
 
-CI builds the ARM64 offline bundle, installs it without network access into a clean Python 3.11 venv, imports `beamcontrol`, and runs `beamctl --help` and `beamd --help`.
+CI builds the ARM64 offline bundle with the pinned `uv` binary and uv-managed CPython 3.11 runtime, installs it without network access into a clean venv, imports `beamcontrol`, and runs `beamctl --help` and `beamd --help`.
 
 CI does not test device-tree overlays, MCP2515 hardware, physical CAN, `can0`, or systemd on the target.
 
 ## Flash and connect
 
-Verify the image:
-
-```bash
-echo "62d025b9bc7ca0e1facfec74ae56ac13978b6745c58177f081d39fbb8041ed45  2025-05-13-raspios-bookworm-arm64-lite.img.xz" | sha256sum --check
-```
-
-Flash it with Raspberry Pi Imager **Use custom**. Set hostname, non-root user, network, and SSH key.
+Use an ARM64 Debian GNU/Linux 13 (`trixie`) image for Raspberry Pi 5. Configure hostname, non-root user, network, and SSH access during imaging or first boot.
 
 ```bash
 export PI_USER=<user>
@@ -50,7 +42,7 @@ ssh -t "$PI_USER@$PI_HOST" \
 ssh -t "$PI_USER@$PI_HOST" 'sudo reboot'
 ```
 
-Provisioning validates the target, installs Python/venv, `can-utils`, and `iproute2`, configures CAN overlays, and creates the service account/directories.
+Provisioning validates Pi 5 + Debian 13 (`trixie`), verifies the base image already provides `/usr/sbin/ip`, configures the CAN overlays, and creates the service account/directories. It does not install Python packages or run `apt-get`; the application runtime comes from the release bundle.
 
 ## Obtain a bundle
 
@@ -87,7 +79,9 @@ ssh -t "$PI_USER@$PI_HOST" '
 
 For USB/local transfer, extract with `python3 -m tarfile -e` and run the same `install.py`.
 
-The installer validates Pi 5/ARM64/Python 3.11, installs a versioned release under `/opt/uorocketry/beamcontrol/releases/`, switches `current` atomically, and installs/enables both services. Upgrades preserve `/etc/uorocketry/beamcontrol.toml`.
+The installer validates Pi 5 + Debian 13 (`trixie`), copies the bundled uv-managed CPython 3.11 runtime under `/opt/uorocketry/python/`, and uses the bundled `uv` binary to create/install the release venv offline. It installs versioned application releases under `/opt/uorocketry/beamcontrol/releases/`, switches `current` atomically, and installs/enables both services. Upgrades preserve `/etc/uorocketry/beamcontrol.toml`. Production runs from the system-level `beamcontrol-can.service` and `beamcontrol.service`; do not run a separate repo/user `beamd` service on the same port.
+
+The release venv is created in a staging directory before the release is renamed into place. Python console scripts contain absolute shebangs, so the installer repairs those entrypoints after the rename and before switching `current`; preserve that ordering when changing the installer.
 
 ## Configure
 
@@ -116,17 +110,19 @@ sudo systemctl restart beamcontrol.service
 ```bash
 cat /proc/device-tree/model; echo
 uname -m
-python3 --version
+cat /etc/os-release
+/opt/uorocketry/beamcontrol/current/venv/bin/python --version
 ip -details -statistics link show can0
 systemctl --no-pager --full status beamcontrol-can.service
 systemctl --no-pager --full status beamcontrol.service
 sudo journalctl -u beamcontrol.service -n 100 --no-pager
 /opt/uorocketry/beamcontrol/current/venv/bin/beamctl discover
 curl --fail http://127.0.0.1:8080/healthz
-candump can0
 ```
 
-Expected: Pi 5, `aarch64`, Python 3.11, `can0` up at 500 kbit/s, active services, discovered receivers, and `{"status":"ok"}`.
+With a receiver attached, expect Pi 5, `aarch64`, Debian GNU/Linux 13 (`trixie`), the application venv on Python 3.11, `can0` at 500 kbit/s, active services, discovered receivers, and `{"status":"ok"}` from `/healthz`.
+
+With no receiver attached, `/healthz` still returns `ok`; dashboard CAN state `waiting` and `/readyz` returning `503` are expected. CAN transmission requires another active controller to assert ACK, so repeated unacknowledged frames can drive the MCP2515 into error-passive state without implying that the Pi HAT itself is faulty.
 
 ## Dashboard
 
@@ -148,6 +144,7 @@ Endpoints:
 | Path | Purpose |
 |:--|:--|
 | `/api/status` | JSON snapshot |
+| `/events` | SSE stream for changed UI atoms |
 | `/healthz` | Process liveness |
 | `/readyz` | CAN/receiver readiness |
 | `/api/docs` | FastAPI docs |

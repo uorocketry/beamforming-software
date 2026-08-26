@@ -107,10 +107,10 @@ pi-bundle: $(UV)
 
 pi-bundle-smoke: pi-bundle
 	@set -euo pipefail; \
-	bundles=(build/beamcontrol-pi-*.tar.gz); \
-	test "$${#bundles[@]}" -eq 1; \
-	python311="$$($(UV) python find 3.11)"; \
-	"$$python311" tools/smoke_pi_bundle.py "$${bundles[0]}"
+	revision="$$(git rev-parse --short HEAD)"; \
+	bundle="build/beamcontrol-pi-$${revision}.tar.gz"; \
+	test -f "$$bundle"; \
+	$(PYTHON) tools/smoke_pi_bundle.py "$$bundle"
 
 ## Firmware targets. NODE is intentionally required to avoid duplicate CAN IDs.
 stm32-test:

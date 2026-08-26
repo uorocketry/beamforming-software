@@ -2,7 +2,10 @@
 
 from __future__ import annotations
 
+import errno
 from collections.abc import Callable
+
+import can
 
 from beamcontrol.client import BeamControlError, NodeStatus
 from beamcontrol.config import BeamControlConfig
@@ -31,6 +34,8 @@ def test_monitor_reports_healthy_and_offline_configured_nodes() -> None:
 
     assert snapshot["can"] == {
         "health": "online",
+        "status": "online",
+        "status_class": "online",
         "channel": "can0",
         "bitrate": "500 kbit/s",
         "sample_point": "87.5%",
@@ -59,6 +64,33 @@ def test_monitor_keeps_dashboard_available_when_can_cannot_open() -> None:
     assert isinstance(can_status, dict)
     assert can_status["health"] == "offline"
     assert can_status["error"] == "can0 does not exist"
+
+
+def test_monitor_reports_open_socketcan_without_bus_ack_as_online() -> None:
+    class NoAckClient:
+        def discover(self, destination: int) -> NodeStatus:
+            raise can.CanOperationError(
+                "No buffer space available",
+                error_code=errno.ENOBUFS,
+            )
+
+    monitor = BeamControlMonitor(
+        BeamControlConfig(),
+        client_factory=lambda _: (NoAckClient(), lambda: None),
+    )
+    monitor.poll_once()
+
+    snapshot = monitor.snapshot()
+    can_status = snapshot["can"]
+    assert isinstance(can_status, dict)
+    assert can_status["health"] == "online"
+    assert can_status["status"] == "waiting"
+    assert can_status["status_class"] == "starting"
+    assert can_status["error"] == "Waiting for a CAN receiver."
+    assert "No buffer space" not in str(can_status)
+    service = snapshot["service"]
+    assert isinstance(service, dict)
+    assert service["health"] == "degraded"
 
 
 def test_wrong_major_rejected() -> None:

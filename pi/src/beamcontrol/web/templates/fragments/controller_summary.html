@@ -1,0 +1,14 @@
+<article id="controller-summary" class="panel summary-card">
+  <div class="card-heading">
+    <div><span class="eyebrow">Controller</span><h2>{{ system.model }}</h2></div>
+    <span id="controller-health" class="health-badge {{ service.health }}">{{ service.health }}</span>
+  </div>
+  <dl class="detail-list">
+    <div><dt>Architecture</dt><dd>{{ system.architecture }}</dd></div>
+    <div><dt>Python</dt><dd>{{ system.python }}</dd></div>
+    <div><dt>BeamControl</dt><dd>{{ system.beamcontrol_version }}</dd></div>
+    <div><dt>Uptime</dt><dd id="controller-uptime">{{ service.uptime }}</dd></div>
+    <div><dt>Operating system</dt><dd>{{ system.operating_system }}</dd></div>
+    <div><dt>CAN address</dt><dd>{{ configuration.source_node }}</dd></div>
+  </dl>
+</article>

@@ -1,0 +1,13 @@
+<article id="can-summary" class="panel summary-card">
+  <div class="card-heading">
+    <div><span class="eyebrow">Transport</span><h2>SocketCAN</h2></div>
+    <span id="can-health" class="health-badge {{ can.status_class|default(can.health) }}">{{ can.status|default(can.health) }}</span>
+  </div>
+  <dl class="detail-list">
+    <div><dt>Interface</dt><dd>{{ can.channel }}</dd></div>
+    <div><dt>Bitrate</dt><dd>{{ can.bitrate }}</dd></div>
+    <div><dt>Sample point</dt><dd>{{ can.sample_point }}</dd></div>
+    <div><dt>Last scan</dt><dd id="can-last-scan">{{ last_cycle }}{% if cycle_ms is not none %} · {{ cycle_ms }} ms{% endif %}</dd></div>
+  </dl>
+  <p id="can-note" class="card-note warning"{% if not can.error %} hidden{% endif %}>{{ can.error or "" }}</p>
+</article>

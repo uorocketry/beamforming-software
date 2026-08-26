@@ -1,0 +1,29 @@
+{% if nodes %}
+<div class="node-grid">
+  {% for node in nodes %}
+  <article id="node-{{ node.node_id }}-card" class="node-card {{ node.health }}">
+    <div class="node-heading">
+      <div><span class="node-label">NODE</span><strong>{{ node.node_id }}</strong></div>
+      <span id="node-{{ node.node_id }}-health" class="health-badge {{ node.health }}">{{ node.health }}</span>
+    </div>
+    <dl class="node-details">
+      <div><dt>Protocol</dt><dd id="node-{{ node.node_id }}-protocol">{{ node.protocol_version }}</dd></div>
+      <div><dt>Response</dt><dd id="node-{{ node.node_id }}-response">{{ node.response_ms ~ " ms" if node.response_ms is not none else "—" }}</dd></div>
+      <div><dt>Last seen</dt><dd id="node-{{ node.node_id }}-last-seen">{{ node.last_seen }}</dd></div>
+    </dl>
+    <p id="node-{{ node.node_id }}-error" class="node-error"{% if not node.error %} hidden{% endif %}>{{ node.error or "" }}</p>
+    <p class="channel-note">RF channels 0–3 are local to this board.</p>
+  </article>
+  {% endfor %}
+</div>
+{% else %}
+<div class="empty-state">
+  {% if can.status|default(can.health) == "waiting" %}
+  <strong>No CAN receiver detected</strong>
+  <span>Connect and power at least one receiver board.</span>
+  {% else %}
+  <strong>No receiver boards discovered</strong>
+  <span>Scanning CAN addresses 1 through 30.</span>
+  {% endif %}
+</div>
+{% endif %}

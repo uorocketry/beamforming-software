@@ -1,16 +1,15 @@
 #!/usr/bin/env python3
-"""Provision the qualified Raspberry Pi OS Bookworm image for BeamControl."""
+"""Provision Debian GNU/Linux 13 (trixie) on Raspberry Pi 5 for BeamControl."""
 
 from __future__ import annotations
 
 import grp
 import os
-import platform
 import pwd
 import subprocess
 from pathlib import Path
 
-from target_platform import validate_pi5_target
+from target_platform import validate_debian_trixie, validate_pi5_target
 
 OVERLAYS = (
     "dtparam=spi=on",
@@ -41,29 +40,16 @@ def main() -> None:
 
     try:
         model = validate_pi5_target()
+        operating_system = validate_debian_trixie()
     except RuntimeError as error:
         raise SystemExit(f"error: {error}") from error
 
-    os_release = platform.freedesktop_os_release()
-    codename = os_release.get("VERSION_CODENAME", "unknown")
-    if codename != "bookworm":
+    ip = Path("/usr/sbin/ip")
+    if not ip.is_file():
         raise SystemExit(
-            "error: BeamControl requires the qualified Raspberry Pi OS Bookworm image; "
-            f"found {codename}. See docs/operations/pi-provisioning.md."
+            "error: /usr/sbin/ip is required to configure SocketCAN; "
+            "install iproute2 in the base OS image"
         )
-
-    run(["apt-get", "update"])
-    run(
-        [
-            "apt-get",
-            "install",
-            "--yes",
-            "python3",
-            "python3-venv",
-            "can-utils",
-            "iproute2",
-        ]
-    )
 
     candidates = (Path("/boot/firmware/config.txt"), Path("/boot/config.txt"))
     config = next((path for path in candidates if path.is_file()), None)
@@ -105,9 +91,10 @@ def main() -> None:
 
     ensure_directory(Path("/etc/uorocketry"), mode=0o755)
     ensure_directory(Path("/opt/uorocketry/beamcontrol/releases"), mode=0o755)
+    ensure_directory(Path("/opt/uorocketry/python"), mode=0o755)
     ensure_directory(Path("/var/lib/uorocketry/beamcontrol"), mode=0o755, owner="beamcontrol")
 
-    print(f"Provisioning complete for {model}. Reboot to apply the CAN overlays.")
+    print(f"Provisioning complete for {model} on {operating_system}. Reboot to apply CAN overlays.")
 
 
 if __name__ == "__main__":
