@@ -23,7 +23,7 @@ Run for every PCB revision and release artifact before enabling RF. Record firmw
 
 ## Clock
 
-- [ ] HSE runs at 48 MHz.
+- [ ] 16 MHz HSE with PLL x3 produces the 48 MHz system clock.
 - [ ] Missing HSE uses bounded HSI48 fallback.
 - [ ] SPI clocks correct in both modes.
 - [ ] Clock-security failure records fault and resets.

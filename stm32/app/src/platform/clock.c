@@ -6,6 +6,11 @@
 #include <stddef.h>
 
 #define CLOCK_STARTUP_ITERATION_LIMIT 1000000u
+#define HSE_PLL_MULTIPLIER 3u
+
+_Static_assert(
+    FIRMWARE_HSE_CLOCK_HZ * HSE_PLL_MULTIPLIER == FIRMWARE_CORE_CLOCK_HZ,
+    "HSE PLL must produce the firmware core clock");
 
 static bool wait_for_register(
     volatile const uint32_t *reg,
@@ -43,7 +48,7 @@ static bool try_hse_pll(void)
     }
 
     configure_48mhz_bus_and_flash();
-    rcc_set_pll_multiplication_factor(RCC_CFGR_PLLMUL_MUL6);
+    rcc_set_pll_multiplication_factor(RCC_CFGR_PLLMUL_MUL3);
     rcc_set_pll_source(RCC_CFGR_PLLSRC_HSE_CLK);
     rcc_set_pllxtpre(RCC_CFGR_PLLXTPRE_HSE_CLK);
     rcc_osc_on(RCC_PLL);

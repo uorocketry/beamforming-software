@@ -23,7 +23,7 @@ class CanTransport(Protocol):
 class SocketCanTransport:
     """Real SocketCAN transport via python-can."""
 
-    def __init__(self, channel: str = "can0") -> None:
+    def __init__(self, channel: str = "beamcan0") -> None:
         self._bus = can.Bus(interface="socketcan", channel=channel)
 
     def send(self, message: can.Message) -> None:

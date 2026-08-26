@@ -29,6 +29,16 @@ def switch_symlink(target: Path, link: Path) -> None:
     os.replace(temporary, link)
 
 
+def migrate_default_can_channel(config: Path) -> bool:
+    """Move the historical default can0 config to the physical-CAN0 stable name."""
+    text = config.read_text(encoding="utf-8")
+    old = 'channel = "can0"'
+    if old not in text:
+        return False
+    config.write_text(text.replace(old, 'channel = "beamcan0"', 1), encoding="utf-8")
+    return True
+
+
 def repair_venv_entrypoints(venv: Path) -> None:
     """Rewrite console-script shebangs after the staged release directory is renamed."""
     bindir = venv / "bin"
@@ -165,10 +175,18 @@ def main() -> None:
     repair_venv_entrypoints(release_dir / "venv")
     switch_symlink(release_dir, current)
 
+    Path("/usr/local/bin").mkdir(parents=True, exist_ok=True)
+    switch_symlink(current / "venv/bin/beamctl", Path("/usr/local/bin/beamctl"))
+
     install_file(
         bundle_dir / "systemd/beamcontrol-can.service",
         Path("/etc/systemd/system/beamcontrol-can.service"),
         0o644,
+    )
+    install_file(
+        bundle_dir / "systemd/configure_can.py",
+        Path("/usr/local/libexec/beamcontrol-can"),
+        0o755,
     )
     install_file(
         bundle_dir / "systemd/beamcontrol.service",
@@ -182,6 +200,9 @@ def main() -> None:
         install_file(bundle_dir / "config/beamcontrol.toml.example", config, 0o640)
         beamcontrol_group = grp.getgrnam("beamcontrol")
         os.chown(config, 0, beamcontrol_group.gr_gid)
+
+    else:
+        migrate_default_can_channel(config)
 
     run(["systemctl", "daemon-reload"])
     run(["systemctl", "enable", "beamcontrol-can.service", "beamcontrol.service"])

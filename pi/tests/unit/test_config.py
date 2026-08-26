@@ -9,7 +9,7 @@ from beamcontrol.config import BeamControlConfig
 
 def test_valid_config():
     c = BeamControlConfig(
-        channel="can0",
+        channel="beamcan0",
         source_node=0,
         poll_interval_s=0.5,
         can_timeout_s=0.1,
@@ -18,7 +18,7 @@ def test_valid_config():
         web_host="127.0.0.1",
         web_port=9000,
     )
-    assert c.channel == "can0"
+    assert c.channel == "beamcan0"
     assert c.can_timeout_s == 0.1
     assert c.can_retries == 4
     assert c.web_host == "127.0.0.1"

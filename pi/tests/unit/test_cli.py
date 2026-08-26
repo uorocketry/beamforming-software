@@ -9,6 +9,9 @@ class FakeClient:
     def __init__(self) -> None:
         self.calls: list[tuple] = []
 
+    def close(self) -> None:
+        pass
+
     def set_phase(self, node, states):
         self.calls.append(("set_phase", node, states))
         return b"\x02\x00"

@@ -19,7 +19,7 @@ def _client(args: argparse.Namespace) -> BeamControlClient:
 
 
 def _add_common_args(p: argparse.ArgumentParser) -> None:
-    p.add_argument("--iface", default="can0", help="CAN interface (default can0)")
+    p.add_argument("--iface", default="beamcan0", help="CAN interface (default beamcan0)")
     p.add_argument("--source", type=int, default=0, help="controller node id (default 0)")
     p.add_argument("--timeout", type=float, default=0.02, help="response timeout (s)")
     p.add_argument("--retries", type=int, default=2, help="retries per command")
@@ -170,6 +170,8 @@ def main(argv: list[str] | None = None) -> int:
     except (BeamControlError, ValueError) as e:
         print(f"error: {e}", file=sys.stderr)
         return 1
+    finally:
+        c.close()
 
 
 if __name__ == "__main__":

@@ -79,7 +79,7 @@ ssh -t "$PI_USER@$PI_HOST" '
 
 For USB/local transfer, extract with `python3 -m tarfile -e` and run the same `install.py`.
 
-The installer validates Pi 5 + Debian 13 (`trixie`), copies the bundled uv-managed CPython 3.11 runtime under `/opt/uorocketry/python/`, and uses the bundled `uv` binary to create/install the release venv offline. It installs versioned application releases under `/opt/uorocketry/beamcontrol/releases/`, switches `current` atomically, and installs/enables both services. Upgrades preserve `/etc/uorocketry/beamcontrol.toml`. Production runs from the system-level `beamcontrol-can.service` and `beamcontrol.service`; do not run a separate repo/user `beamd` service on the same port.
+The installer validates Pi 5 + Debian 13 (`trixie`), copies the bundled uv-managed CPython 3.11 runtime under `/opt/uorocketry/python/`, and uses the bundled `uv` binary to create/install the release venv offline. Physical HAT CAN0 is resolved by its SPI parent (`spi1.1`) and renamed `beamcan0`, avoiding kernel probe-order dependence between the two MCP2515 controllers. It installs versioned application releases under `/opt/uorocketry/beamcontrol/releases/`, switches `current` atomically, and installs/enables both services. Upgrades preserve `/etc/uorocketry/beamcontrol.toml`. Production runs from the system-level `beamcontrol-can.service` and `beamcontrol.service`; do not run a separate repo/user `beamd` service on the same port.
 
 The release venv is created in a staging directory before the release is renamed into place. Python console scripts contain absolute shebangs, so the installer repairs those entrypoints after the rename and before switching `current`; preserve that ordering when changing the installer.
 
@@ -91,7 +91,7 @@ sudo nano /etc/uorocketry/beamcontrol.toml
 
 ```toml
 [beamcontrol]
-channel = "can0"
+channel = "beamcan0"
 source_node = 0
 poll_interval_s = 1.0
 can_timeout_s = 0.020
@@ -112,7 +112,7 @@ cat /proc/device-tree/model; echo
 uname -m
 cat /etc/os-release
 /opt/uorocketry/beamcontrol/current/venv/bin/python --version
-ip -details -statistics link show can0
+ip -details -statistics link show beamcan0
 systemctl --no-pager --full status beamcontrol-can.service
 systemctl --no-pager --full status beamcontrol.service
 sudo journalctl -u beamcontrol.service -n 100 --no-pager
@@ -120,7 +120,7 @@ sudo journalctl -u beamcontrol.service -n 100 --no-pager
 curl --fail http://127.0.0.1:8080/healthz
 ```
 
-With a receiver attached, expect Pi 5, `aarch64`, Debian GNU/Linux 13 (`trixie`), the application venv on Python 3.11, `can0` at 500 kbit/s, active services, discovered receivers, and `{"status":"ok"}` from `/healthz`.
+With a receiver attached, expect Pi 5, `aarch64`, Debian GNU/Linux 13 (`trixie`), the application venv on Python 3.11, `beamcan0` at 500 kbit/s, active services, discovered receivers, and `{"status":"ok"}` from `/healthz`.
 
 With no receiver attached, `/healthz` still returns `ok`; dashboard CAN state `waiting` and `/readyz` returning `503` are expected. CAN transmission requires another active controller to assert ACK, so repeated unacknowledged frames can drive the MCP2515 into error-passive state without implying that the Pi HAT itself is faulty.
 

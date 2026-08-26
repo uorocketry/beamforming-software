@@ -122,6 +122,7 @@ def main() -> None:
     )
     shutil.copy2(REPO_ROOT / "pi/deploy/target_platform.py", stage)
     shutil.copy2(REPO_ROOT / "pi/deploy/beamcontrol-can.service", stage / "systemd")
+    shutil.copy2(REPO_ROOT / "pi/deploy/configure_can.py", stage / "systemd")
     shutil.copy2(REPO_ROOT / "pi/deploy/beamcontrol.service", stage / "systemd")
     shutil.copy2(REPO_ROOT / "pi/deploy/beamcontrol.toml.example", stage / "config")
     (stage / "VERSION").write_text(f"{version}\n", encoding="utf-8")

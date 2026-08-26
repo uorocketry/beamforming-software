@@ -82,8 +82,11 @@ class BeamControlClient:
         self._io_lock = threading.Lock()
 
     @classmethod
-    def socketcan(cls, channel: str = "can0", **kwargs: Any) -> BeamControlClient:
+    def socketcan(cls, channel: str = "beamcan0", **kwargs: Any) -> BeamControlClient:
         return cls(SocketCanTransport(channel), **kwargs)
+
+    def close(self) -> None:
+        self._transport.close()
 
     # -- helpers ---------------------------------------------------------------
     def _next_seq(self) -> int:

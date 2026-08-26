@@ -1,16 +1,13 @@
 [Unit]
 Description=Configure BeamControl SocketCAN interface
-After=sys-subsystem-net-devices-can0.device
-BindsTo=sys-subsystem-net-devices-can0.device
+After=systemd-udevd.service
 Before=beamcontrol.service
 
 [Service]
 Type=oneshot
 RemainAfterExit=yes
-ExecStart=-/usr/sbin/ip link set can0 down
-ExecStart=/usr/sbin/ip link set can0 type can bitrate 500000 sample-point 0.875 sjw 1 restart-ms 100
-ExecStart=/usr/sbin/ip link set can0 up
-ExecStop=-/usr/sbin/ip link set can0 down
+ExecStart=/usr/local/libexec/beamcontrol-can setup
+ExecStop=/usr/local/libexec/beamcontrol-can stop
 
 [Install]
 WantedBy=multi-user.target

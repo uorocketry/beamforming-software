@@ -55,6 +55,7 @@ def smoke_test(bundle: Path) -> None:
             root / "python",
             root / "systemd/beamcontrol.service",
             root / "systemd/beamcontrol-can.service",
+            root / "systemd/configure_can.py",
             root / "config/beamcontrol.toml.example",
         )
         missing = [

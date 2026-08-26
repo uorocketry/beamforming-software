@@ -9,7 +9,7 @@ from pathlib import Path
 
 @dataclass
 class BeamControlConfig:
-    channel: str = "can0"
+    channel: str = "beamcan0"
     source_node: int = 0
     poll_interval_s: float = 1.0
     can_timeout_s: float = 0.020
@@ -48,7 +48,7 @@ class BeamControlConfig:
         data = tomllib.loads(Path(path).read_text(encoding="utf-8"))
         root = data.get("beamcontrol", {})
         return cls(
-            channel=str(root.get("channel", "can0")),
+            channel=str(root.get("channel", "beamcan0")),
             source_node=int(root.get("source_node", 0)),
             poll_interval_s=float(root.get("poll_interval_s", 1.0)),
             can_timeout_s=float(root.get("can_timeout_s", 0.020)),

@@ -1,6 +1,6 @@
 # Raspberry Pi controller
 
-Python 3.11 controller for Raspberry Pi 5 on Debian GNU/Linux 13 (`trixie`), CAN node `0`. The deployment bundle carries the pinned `uv` binary and managed Python runtime, so the system Python version is not part of the application contract. Receiver boards use nodes `1..30` and channels `0..3`.
+Python 3.11 controller for Raspberry Pi 5 on Debian GNU/Linux 13 (`trixie`), CAN node `0`. The deployment bundle carries the pinned `uv` binary and managed Python runtime, so the system Python version is not part of the application contract. Receiver boards use nodes `1..30` and channels `0..3`. The printed HAT CAN0 connector is exposed to the application as `beamcan0` by resolving SPI parent `spi1.1`, not by trusting Linux `can0`/`can1` probe order.
 
 ## Package
 

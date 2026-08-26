@@ -1,5 +1,5 @@
 [beamcontrol]
-channel = "can0"
+channel = "beamcan0"
 source_node = 0
 poll_interval_s = 1.0
 can_timeout_s = 0.020

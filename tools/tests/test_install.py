@@ -49,3 +49,26 @@ def test_bundled_python_runtime_requires_exactly_one_runtime(tmp_path: Path) -> 
     (second / "bin/python3.11").write_text("", encoding="utf-8")
     with pytest.raises(SystemExit, match="exactly one uv-managed Python 3.11 runtime"):
         INSTALL.bundled_python_runtime(tmp_path)
+
+
+def test_migrate_default_can_channel_updates_only_old_default(tmp_path: Path) -> None:
+    config = tmp_path / "beamcontrol.toml"
+    config.write_text('[beamcontrol]\nchannel = "can0"\n', encoding="utf-8")
+
+    assert INSTALL.migrate_default_can_channel(config)
+    assert 'channel = "beamcan0"' in config.read_text(encoding="utf-8")
+
+    config.write_text('[beamcontrol]\nchannel = "vcan7"\n', encoding="utf-8")
+    assert not INSTALL.migrate_default_can_channel(config)
+    assert 'channel = "vcan7"' in config.read_text(encoding="utf-8")
+
+
+def test_switch_symlink_can_expose_current_beamctl(tmp_path: Path) -> None:
+    current = tmp_path / "current"
+    command = tmp_path / "bin/beamctl"
+    command.parent.mkdir()
+
+    INSTALL.switch_symlink(current / "venv/bin/beamctl", command)
+
+    assert command.is_symlink()
+    assert command.readlink() == current / "venv/bin/beamctl"

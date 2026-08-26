@@ -36,7 +36,7 @@ def test_monitor_reports_healthy_and_offline_configured_nodes() -> None:
         "health": "online",
         "status": "online",
         "status_class": "online",
-        "channel": "can0",
+        "channel": "beamcan0",
         "bitrate": "500 kbit/s",
         "sample_point": "87.5%",
         "error": None,
