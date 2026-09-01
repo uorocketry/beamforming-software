@@ -23,6 +23,11 @@ def _add_common_args(p: argparse.ArgumentParser) -> None:
     p.add_argument("--source", type=int, default=0, help="controller node id (default 0)")
     p.add_argument("--timeout", type=float, default=0.02, help="response timeout (s)")
     p.add_argument("--retries", type=int, default=2, help="retries per command")
+    p.add_argument(
+        "--dry-run",
+        action="store_true",
+        help="validate and print the command without opening SocketCAN",
+    )
 
 
 def build_parser() -> argparse.ArgumentParser:
@@ -121,10 +126,48 @@ def _validate_command_arguments(parser: argparse.ArgumentParser, args: argparse.
             parser.error("individual mode requires --channel")
 
 
+def _dry_run(args: argparse.Namespace) -> None:
+    common = (
+        f"iface={args.iface} source={args.source} timeout={args.timeout:g}s retries={args.retries}"
+    )
+    if args.command == "discover":
+        detail = "nodes=1-30"
+    elif args.command == "ping":
+        detail = f"node={args.node}"
+    elif args.command == "set-phase":
+        detail = (
+            f"node={args.node} states={','.join(map(str, args.states))}"
+            if args.states is not None
+            else f"node={args.node} channel={args.channel} state={args.state}"
+        )
+    elif args.command == "set-vga":
+        detail = (
+            f"node={args.node} attenuations={','.join(map(str, args.attenuations))}"
+            if args.attenuations is not None
+            else (f"node={args.node} channel={args.channel} attenuation={args.attenuation}")
+        )
+    elif args.command == "set-combined":
+        detail = (
+            f"node={args.node} states={','.join(map(str, args.states))} "
+            f"attenuations={','.join(map(str, args.attenuations))}"
+            if args.states is not None
+            else (
+                f"node={args.node} channel={args.channel} state={args.state} "
+                f"attenuation={args.attenuation}"
+            )
+        )
+    else:
+        detail = f"node={args.node} channel={args.channel}"
+    print(f"DRY RUN {args.command}: {detail} {common}")
+
+
 def main(argv: list[str] | None = None) -> int:
     parser = build_parser()
     args = parser.parse_args(argv)
     _validate_command_arguments(parser, args)
+    if args.dry_run:
+        _dry_run(args)
+        return 0
     c = _client(args)
     try:
         if args.command == "discover":

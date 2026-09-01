@@ -36,6 +36,13 @@ beamctl set-combined 1 --states 64 65 66 67 --attenuations 12 13 14 15
 beamctl enter-safe 1 --channel 2
 ```
 
+Validate command parsing and inspect the planned target without opening SocketCAN:
+
+```bash
+beamctl set-phase 1 --state 128 --channel 2 --dry-run
+make pi-command-smoke
+```
+
 ## Dashboard
 
 `beamd` serves FastAPI/Jinja2 status on port `8080`. The initial page is server-rendered; live state arrives over `/events` with Server-Sent Events. Updates are atom-scoped, so unchanged cards are not resent or replaced. Receiver-list structure changes only when discovered nodes change, and the event list changes only when events do.

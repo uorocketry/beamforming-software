@@ -18,7 +18,7 @@ export PATH := $(ARM_TOOLCHAIN)/bin:$(PATH)
 export UV_CACHE_DIR UV_PYTHON_INSTALL_DIR UV_PROJECT_ENVIRONMENT
 
 .PHONY: help doctor quickstart setup setup-safety tools toolchain libopencm3 libopencm3-build
-.PHONY: pi-sync pi-test pi-lint pi-format pi-build pi-bundle pi-bundle-smoke
+.PHONY: pi-sync pi-test pi-lint pi-format pi-build pi-bundle pi-bundle-smoke pi-command-smoke
 .PHONY: stm32-test stm32-sanitize stm32-static stm32-verify firmware firmware-check firmware-size
 .PHONY: protocol-check simulation-test simulation-up simulation-down test check clean distclean
 
@@ -89,6 +89,9 @@ pi-sync: $(UV)
 
 pi-test: $(UV)
 	$(UV) run --project pi --frozen pytest pi/tests tools/tests
+
+pi-command-smoke: $(UV)
+	$(UV) run --project pi --frozen python tools/smoke_beamctl_commands.py
 
 pi-lint: $(UV)
 	$(UV) run --project pi --frozen ruff check pi tools simulation/tests
