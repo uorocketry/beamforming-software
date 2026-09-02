@@ -5,6 +5,9 @@ from __future__ import annotations
 import argparse
 import sys
 
+import can
+
+from . import protocol as P
 from .client import BeamControlClient, BeamControlError
 from .transport import SocketCanTransport
 
@@ -45,85 +48,27 @@ def build_parser() -> argparse.ArgumentParser:
     p.add_argument("node", type=int, help="receiver-board CAN node 1-30")
     _add_common_args(p)
 
-    p = sub.add_parser("set-phase", help="set one or all phase states")
+    p = sub.add_parser("set-phase", help="set the receiver phase state")
     p.add_argument("node", type=int, help="receiver-board CAN node 1-30")
-    phase = p.add_mutually_exclusive_group(required=True)
-    phase.add_argument("--state", type=int, help="one phase-state index 0-255")
-    phase.add_argument(
-        "--states",
-        nargs=4,
-        type=int,
-        metavar=("PS1", "PS2", "PS3", "PS4"),
-        help="four phase-state indexes 0-255",
-    )
-    p.add_argument("--channel", type=int, help="RF channel 0-3 for --state")
+    p.add_argument("--state", type=int, required=True, help="phase-state index 0-255")
     _add_common_args(p)
 
-    p = sub.add_parser("set-vga", help="set one or all VGA attenuations")
+    p = sub.add_parser("set-vga", help="set the receiver VGA attenuation")
     p.add_argument("node", type=int, help="receiver-board CAN node 1-30")
-    vga = p.add_mutually_exclusive_group(required=True)
-    vga.add_argument("--attenuation", type=int, help="one attenuation value 0-23 dB")
-    vga.add_argument(
-        "--attenuations",
-        nargs=4,
-        type=int,
-        metavar=("VGA1", "VGA2", "VGA3", "VGA4"),
-        help="four attenuation values, each 0-23 dB",
-    )
-    p.add_argument("--channel", type=int, help="RF channel 0-3 for --attenuation")
+    p.add_argument("--attenuation", type=int, required=True, help="attenuation 0-23 dB")
     _add_common_args(p)
 
-    p = sub.add_parser("set-combined", help="set phase and VGA for one or all channels")
+    p = sub.add_parser("set-combined", help="set receiver phase and VGA")
     p.add_argument("node", type=int, help="receiver-board CAN node 1-30")
-    phase = p.add_mutually_exclusive_group(required=True)
-    phase.add_argument("--state", type=int, help="one phase-state index 0-255")
-    phase.add_argument(
-        "--states",
-        nargs=4,
-        type=int,
-        metavar=("PS1", "PS2", "PS3", "PS4"),
-        help="four phase-state indexes 0-255",
-    )
-    vga = p.add_mutually_exclusive_group(required=True)
-    vga.add_argument("--attenuation", type=int, help="one attenuation value 0-23 dB")
-    vga.add_argument(
-        "--attenuations",
-        nargs=4,
-        type=int,
-        metavar=("VGA1", "VGA2", "VGA3", "VGA4"),
-        help="four attenuation values, each 0-23 dB",
-    )
-    p.add_argument("--channel", type=int, help="RF channel 0-3 for individual mode")
+    p.add_argument("--state", type=int, required=True, help="phase-state index 0-255")
+    p.add_argument("--attenuation", type=int, required=True, help="attenuation 0-23 dB")
     _add_common_args(p)
 
-    p = sub.add_parser("enter-safe", help="enter safe state on one RF channel")
+    p = sub.add_parser("enter-safe", help="enter the receiver safe state")
     p.add_argument("node", type=int, help="receiver-board CAN node 1-30")
-    p.add_argument("--channel", type=int, required=True, help="RF channel 0-3")
     _add_common_args(p)
 
     return parser
-
-
-def _validate_command_arguments(parser: argparse.ArgumentParser, args: argparse.Namespace) -> None:
-    if args.command == "set-phase":
-        if args.states is not None and args.channel is not None:
-            parser.error("--channel is valid only with --state")
-        if args.state is not None and args.channel is None:
-            parser.error("--state requires --channel")
-    elif args.command == "set-vga":
-        if args.attenuations is not None and args.channel is not None:
-            parser.error("--channel is valid only with --attenuation")
-        if args.attenuation is not None and args.channel is None:
-            parser.error("--attenuation requires --channel")
-    elif args.command == "set-combined":
-        bulk = args.states is not None and args.attenuations is not None
-        individual = args.state is not None and args.attenuation is not None
-        if not (bulk or individual):
-            parser.error("use --state with --attenuation, or --states with --attenuations")
-        if bulk and args.channel is not None:
-            parser.error("--channel is valid only for individual mode")
-        if individual and args.channel is None:
-            parser.error("individual mode requires --channel")
 
 
 def _dry_run(args: argparse.Namespace) -> None:
@@ -135,45 +80,50 @@ def _dry_run(args: argparse.Namespace) -> None:
     elif args.command == "ping":
         detail = f"node={args.node}"
     elif args.command == "set-phase":
-        detail = (
-            f"node={args.node} states={','.join(map(str, args.states))}"
-            if args.states is not None
-            else f"node={args.node} channel={args.channel} state={args.state}"
-        )
+        detail = f"node={args.node} state={args.state}"
     elif args.command == "set-vga":
-        detail = (
-            f"node={args.node} attenuations={','.join(map(str, args.attenuations))}"
-            if args.attenuations is not None
-            else (f"node={args.node} channel={args.channel} attenuation={args.attenuation}")
-        )
+        detail = f"node={args.node} attenuation={args.attenuation}"
     elif args.command == "set-combined":
-        detail = (
-            f"node={args.node} states={','.join(map(str, args.states))} "
-            f"attenuations={','.join(map(str, args.attenuations))}"
-            if args.states is not None
-            else (
-                f"node={args.node} channel={args.channel} state={args.state} "
-                f"attenuation={args.attenuation}"
-            )
-        )
+        detail = f"node={args.node} state={args.state} attenuation={args.attenuation}"
     else:
-        detail = f"node={args.node} channel={args.channel}"
+        detail = f"node={args.node}"
     print(f"DRY RUN {args.command}: {detail} {common}")
+
+
+def _validate_arguments(parser: argparse.ArgumentParser, args: argparse.Namespace) -> None:
+    if args.source != P.CONTROLLER_NODE:
+        parser.error(f"--source must be controller node {P.CONTROLLER_NODE}")
+    if args.timeout <= 0:
+        parser.error("--timeout must be positive")
+    if args.retries < 0:
+        parser.error("--retries must be non-negative")
+    if args.command != "discover" and not 1 <= args.node <= 30:
+        parser.error("node must be a receiver node 1..30")
+    if args.command in {"set-phase", "set-combined"}:
+        P.validate_phase_state(args.state)
+    if args.command in {"set-vga", "set-combined"}:
+        P.validate_attenuation(args.attenuation)
 
 
 def main(argv: list[str] | None = None) -> int:
     parser = build_parser()
     args = parser.parse_args(argv)
-    _validate_command_arguments(parser, args)
+    try:
+        _validate_arguments(parser, args)
+    except ValueError as error:
+        parser.error(str(error))
     if args.dry_run:
         _dry_run(args)
         return 0
-    c = _client(args)
+    c: BeamControlClient | None = None
     try:
+        c = _client(args)
         if args.command == "discover":
+            discovered = 0
             for node in range(1, 31):
                 try:
                     status = c.discover(node)
+                    discovered += 1
                     print(
                         f"node {node:2d}: v{status.major}.{status.minor}.{status.patch} "
                         f"health=0x{status.health_flags:02x} "
@@ -182,39 +132,29 @@ def main(argv: list[str] | None = None) -> int:
                     )
                 except BeamControlError:
                     pass
+            if discovered == 0:
+                print("error: no receiver boards discovered", file=sys.stderr)
+                return 1
         elif args.command == "ping":
             print("STATUS:", c.discover(args.node))
         elif args.command == "set-phase":
-            if args.states is not None:
-                reply = c.set_phase(args.node, args.states)
-            else:
-                reply = c.set_phase_channel(args.node, args.channel, args.state)
+            reply = c.set_phase(args.node, args.state)
             print("ACK", reply.hex())
         elif args.command == "set-vga":
-            if args.attenuations is not None:
-                reply = c.set_vga(args.node, args.attenuations)
-            else:
-                reply = c.set_vga_channel(args.node, args.channel, args.attenuation)
+            reply = c.set_vga(args.node, args.attenuation)
             print("ACK", reply.hex())
         elif args.command == "set-combined":
-            if args.states is not None:
-                reply = c.set_combined(args.node, args.states, args.attenuations)
-            else:
-                reply = c.set_combined_channel(
-                    args.node,
-                    args.channel,
-                    args.state,
-                    args.attenuation,
-                )
+            reply = c.set_combined(args.node, args.state, args.attenuation)
             print("ACK", reply.hex())
         elif args.command == "enter-safe":
-            print("ACK", c.enter_safe(args.node, args.channel).hex())
+            print("ACK", c.enter_safe(args.node).hex())
         return 0
-    except (BeamControlError, ValueError) as e:
+    except (BeamControlError, can.CanError, OSError, ValueError) as e:
         print(f"error: {e}", file=sys.stderr)
         return 1
     finally:
-        c.close()
+        if c is not None:
+            c.close()
 
 
 if __name__ == "__main__":

@@ -9,8 +9,7 @@ from beamcontrol.client import BeamControlClient, BeamControlError, BeamControlP
 
 from .fake_transport import FakeTransport
 
-PHASES = [128, 64, 32, 16]
-ATTENUATIONS = [0, 8, 12, 23]
+PHASE = 128
 
 
 class FakeClock:
@@ -76,7 +75,7 @@ def test_exact_retry_reuses_same_message():
     """On timeout, the retry resends the identical arbitration ID + bytes."""
     client, _, transport = _make([None], retries=2)
     with pytest.raises(BeamControlError):
-        client.set_phase(3, PHASES)
+        client.set_phase(3, PHASE)
     sent = transport.sent
     assert len(sent) == 3  # 1 initial + 2 retries
     ids = {m.arbitration_id for m in sent}
@@ -87,7 +86,7 @@ def test_exact_retry_reuses_same_message():
 def test_ack_matching():
     client, _, _ = _make([_ack(3, 42, P.SET_PHASE)])
     client._seq = 41  # force next seq to 42
-    out = client.set_phase(3, PHASES)
+    out = client.set_phase(3, PHASE)
     assert out == bytes([P.SET_PHASE, P.RES_OK])
 
 
@@ -97,52 +96,37 @@ def test_wrong_node_rejected():
     right = _ack(3, 42, P.SET_PHASE)
     client, _, _ = _make([wrong, right])
     client._seq = 41
-    assert client.set_phase(3, PHASES) == bytes([P.SET_PHASE, P.RES_OK])
+    assert client.set_phase(3, PHASE) == bytes([P.SET_PHASE, P.RES_OK])
 
 
 def test_error_raises():
     client, _, _ = _make([_error(3, 42, P.SET_PHASE, P.RES_BAD_VALUE)])
     client._seq = 41
     with pytest.raises(BeamControlError) as exc:
-        client.set_phase(3, PHASES)
+        client.set_phase(3, PHASE)
     assert exc.value.result == P.RES_BAD_VALUE
 
 
 def test_timeout_is_unknown_state():
     client, _, _ = _make([None], retries=0)
     with pytest.raises(BeamControlError) as exc:
-        client.set_vga(3, ATTENUATIONS)
+        client.set_vga(3, 8)
     assert "final state unknown" in str(exc.value)
 
 
 def test_sequence_ffff_is_normal():
     client, _, transport = _make([_ack(3, 0xFFFF, P.ENTER_SAFE)], retries=0)
     client._seq = 0xFFFE
-    client.enter_safe(3, 0)
+    client.enter_safe(3)
     assert P.parse_id(transport.sent[0].arbitration_id)["sequence"] == 0xFFFF
-
-
-@pytest.mark.parametrize(
-    ("method", "args"),
-    [
-        ("set_phase", ([1, 2, 3],)),
-        ("set_phase", ([1, 2, 3, 256],)),
-        ("set_vga", ([0, 8, 24, 23],)),
-        ("set_combined", (PHASES, [0, 1, 2])),
-    ],
-)
-def test_bulk_payload_validation(method, args):
-    client, _, _ = _make([None], retries=0)
-    with pytest.raises(ValueError):
-        getattr(client, method)(3, *args)
 
 
 @pytest.mark.parametrize(
     ("method", "args", "command_type", "payload"),
     [
-        ("set_phase_channel", (2, 128), P.SET_PHASE, bytes([128, 2])),
-        ("set_vga_channel", (1, 8), P.SET_VGA, bytes([8, 1])),
-        ("set_combined_channel", (3, 64, 12), P.SET_COMBINED, bytes([64, 3, 12])),
+        ("set_phase", (128,), P.SET_PHASE, bytes([128])),
+        ("set_vga", (8,), P.SET_VGA, bytes([8])),
+        ("set_combined", (64, 12), P.SET_COMBINED, bytes([64, 12])),
     ],
 )
 def test_individual_methods_send_exact_payload(method, args, command_type, payload):
@@ -155,10 +139,9 @@ def test_individual_methods_send_exact_payload(method, args, command_type, paylo
 @pytest.mark.parametrize(
     ("method", "args"),
     [
-        ("set_phase_channel", (4, 128)),
-        ("set_phase_channel", (2, 256)),
-        ("set_vga_channel", (2, 24)),
-        ("set_combined_channel", (2, 64, 24)),
+        ("set_phase", (256,)),
+        ("set_vga", (24,)),
+        ("set_combined", (64, 24)),
     ],
 )
 def test_individual_method_validation(method, args):
@@ -189,6 +172,19 @@ def test_discovery_sends_ping():
     assert bytes(transport.sent[0].data) == b""
 
 
+def test_discovery_retries_exact_ping():
+    client, _, transport = _make([None, None, _status(3)], retries=2)
+
+    status = client.discover(3)
+
+    assert status.node_id == 3
+    assert len(transport.sent) == 3
+    assert {message.arbitration_id for message in transport.sent} == {
+        transport.sent[0].arbitration_id
+    }
+    assert {bytes(message.data) for message in transport.sent} == {b""}
+
+
 # --- malformed / mismatched response handling ------------------------------
 
 
@@ -198,7 +194,7 @@ def test_ack_wrong_command_type_raises():
     client, _, _ = _make([wrong])
     client._seq = 41
     with pytest.raises(BeamControlProtocolError):
-        client.set_phase(3, PHASES)
+        client.set_phase(3, PHASE)
 
 
 def test_ack_bad_dlc_raises():
@@ -207,7 +203,7 @@ def test_ack_bad_dlc_raises():
         client, _, _ = _make([wrong])
         client._seq = 41
         with pytest.raises(BeamControlProtocolError):
-            client.set_phase(3, PHASES)
+            client.set_phase(3, PHASE)
 
 
 def test_error_wrong_command_type_raises():
@@ -215,7 +211,7 @@ def test_error_wrong_command_type_raises():
     client, _, _ = _make([wrong])
     client._seq = 41
     with pytest.raises(BeamControlProtocolError):
-        client.set_phase(3, PHASES)
+        client.set_phase(3, PHASE)
 
 
 def test_discovery_wrong_sequence_ignored():
@@ -249,7 +245,7 @@ def test_discovery_mismatched_node_id_ignored():
 @pytest.mark.parametrize("bad", [0, 31, 32, -1])
 @pytest.mark.parametrize(
     ("method", "args"),
-    [("enter_safe", (0,)), ("set_phase", (PHASES,)), ("discover", ())],
+    [("enter_safe", ()), ("set_phase", (PHASE,)), ("discover", ())],
 )
 def test_unicast_destination_enforced(bad, method, args):
     client, _, _ = _make([None], retries=0)
@@ -259,18 +255,12 @@ def test_unicast_destination_enforced(bad, method, args):
 
 def test_broadcast_enter_safe_sends_and_does_not_wait():
     client, _, transport = _make([], retries=0)
-    client.broadcast_enter_safe(2)
+    client.broadcast_enter_safe()
     assert len(transport.sent) == 1
     f = P.parse_id(transport.sent[0].arbitration_id)
     assert f["type"] == P.ENTER_SAFE
     assert f["dest"] == P.BROADCAST_NODE
-    assert bytes(transport.sent[0].data) == bytes([2])
-
-
-def test_broadcast_enter_safe_validates_channel():
-    client, _, _ = _make([], retries=0)
-    with pytest.raises(ValueError):
-        client.broadcast_enter_safe(4)
+    assert bytes(transport.sent[0].data) == b""
 
 
 @pytest.mark.parametrize("kwargs", [{"source_node": 5}, {"timeout": 0}, {"retries": -1}])
@@ -287,7 +277,7 @@ def test_sequence_reuse_recovers_with_fresh_sequence():
     ack = _ack(3, 2, P.SET_PHASE)  # seq 2 -> accepted
     client, _, transport = _make([reuse, ack], retries=0)
     client._seq = 0
-    out = client.set_phase(3, PHASES)
+    out = client.set_phase(3, PHASE)
     assert out == bytes([P.SET_PHASE, P.RES_OK])
     seqs = [P.parse_id(m.arbitration_id)["sequence"] for m in transport.sent]
     assert seqs == [1, 2]
@@ -300,5 +290,5 @@ def test_sequence_reuse_persisting_raises():
     client, _, _ = _make([reuse1, reuse2], retries=0)
     client._seq = 0
     with pytest.raises(BeamControlError) as exc:
-        client.set_phase(3, PHASES)
+        client.set_phase(3, PHASE)
     assert exc.value.result == P.RES_SEQUENCE_REUSE

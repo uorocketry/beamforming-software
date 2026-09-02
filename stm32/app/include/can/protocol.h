@@ -6,8 +6,8 @@
 #include <stdbool.h>
 #include <stdint.h>
 
-#define CAN_PROTOCOL_VERSION_MAJOR 2u
-#define CAN_PROTOCOL_VERSION_MINOR 1u
+#define CAN_PROTOCOL_VERSION_MAJOR 3u
+#define CAN_PROTOCOL_VERSION_MINOR 0u
 #define CAN_PROTOCOL_VERSION_PATCH 0u
 
 #define CAN_EXTENDED_ID_MAX 0x1fffffffu
@@ -27,13 +27,10 @@
 #define CAN_ID_NODE_MASK 0x1fu
 #define CAN_ID_SEQUENCE_MASK 0xffffu
 
-#define CAN_ENTER_SAFE_LENGTH 1u
-#define CAN_SET_PHASE_INDIVIDUAL_LENGTH 2u
-#define CAN_SET_PHASE_BULK_LENGTH 4u
-#define CAN_SET_VGA_INDIVIDUAL_LENGTH 2u
-#define CAN_SET_VGA_BULK_LENGTH 4u
-#define CAN_SET_COMBINED_INDIVIDUAL_LENGTH 3u
-#define CAN_SET_COMBINED_BULK_LENGTH 8u
+#define CAN_ENTER_SAFE_LENGTH 0u
+#define CAN_SET_PHASE_LENGTH 1u
+#define CAN_SET_VGA_LENGTH 1u
+#define CAN_SET_COMBINED_LENGTH 2u
 #define CAN_PING_LENGTH 0u
 
 #define CAN_ACK_LENGTH 2u
@@ -98,13 +95,8 @@ typedef struct can_command {
     uint8_t source;
     uint16_t sequence;
 
-    /* Fixed order: array index 0..3 maps to RF channel / PE44820 address 1..4. */
-    uint8_t phase_states[RF_CHANNEL_COUNT];
-    uint8_t attenuation_db[RF_CHANNEL_COUNT];
-
-    /* Individual RF commands and ENTER_SAFE use this zero-based channel. */
-    uint8_t channel;
-    bool bulk_update;
+    uint8_t phase_state;
+    uint8_t attenuation_db;
 } can_command_t;
 
 typedef struct can_status_payload {

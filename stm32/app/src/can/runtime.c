@@ -270,10 +270,8 @@ bool can_runtime_start(
         return false;
     }
 
-    for (uint8_t channel = 0u; channel < RF_CHANNEL_COUNT; ++channel) {
-        if (initial_state->attenuation_db[channel] > VGA_MAX_ATTENUATION_DB) {
-            return false;
-        }
+    if (initial_state->attenuation_db > VGA_MAX_ATTENUATION_DB) {
+        return false;
     }
 
     memset(runtime, 0, sizeof(*runtime));
@@ -346,11 +344,16 @@ bool can_runtime_service_next(can_runtime_t *runtime)
         return true;
     }
 
-    rf_execute_plan(
+    const firmware_fault_t execution_fault = rf_execute_plan(
         &plan,
         CAN_SPI_TIMEOUT_MILLIS,
         &runtime->last_phase_command,
         &runtime->last_vga_command);
+    if (execution_fault != FIRMWARE_FAULT_NONE) {
+        retained_diagnostics_set_fault(execution_fault);
+        send_error_for_command(runtime, &command, CAN_COMMAND_RESULT_HARDWARE);
+        return true;
+    }
     runtime->state = plan.resulting_state;
     retained_diagnostics_set_commands(
         runtime->last_phase_command,

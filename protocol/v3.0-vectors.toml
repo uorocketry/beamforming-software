@@ -1,4 +1,4 @@
-# Shared protocol v2.1 vectors for Python and C contract tests.
+# Shared protocol v3.0 vectors for Python and C contract tests.
 
 [[id_vectors]]
 name = "set_phase_node_3_seq_42"
@@ -25,104 +25,77 @@ sequence = 1
 extended_id = 0x14070001
 
 [[commands]]
-name = "set_phase_individual"
+name = "set_phase"
 type = 2
 destination = 3
 source = 0
 sequence = 40
-data = [128, 2]
+data = [128]
 valid = true
 
 [[commands]]
-name = "set_phase_bulk"
-type = 2
+name = "set_vga"
+type = 3
 destination = 3
 source = 0
 sequence = 41
-data = [128, 64, 32, 16]
+data = [8]
 valid = true
 
 [[commands]]
-name = "set_vga_individual"
-type = 3
+name = "set_combined"
+type = 1
 destination = 3
 source = 0
 sequence = 42
-data = [8, 1]
+data = [64, 12]
 valid = true
 
 [[commands]]
-name = "set_vga_bulk"
-type = 3
-destination = 3
-source = 0
-sequence = 43
-data = [0, 8, 12, 23]
-valid = true
-
-[[commands]]
-name = "set_combined_individual"
-type = 1
-destination = 3
-source = 0
-sequence = 44
-data = [64, 3, 12]
-valid = true
-
-[[commands]]
-name = "set_combined_bulk"
-type = 1
-destination = 3
-source = 0
-sequence = 45
-data = [10, 20, 30, 40, 1, 2, 3, 4]
-valid = true
-
-[[commands]]
-name = "reject_phase_dlc_3"
-type = 2
-destination = 3
-source = 0
-sequence = 46
-data = [128, 2, 0]
-valid = false
-result = 1
-
-[[commands]]
-name = "reject_vga_channel_4"
-type = 3
-destination = 3
-source = 0
-sequence = 47
-data = [8, 4]
-valid = false
-result = 2
-
-[[commands]]
-name = "reject_bulk_attenuation_24"
-type = 3
-destination = 3
-source = 0
-sequence = 48
-data = [0, 8, 24, 23]
-valid = false
-result = 2
-
-[[commands]]
-name = "reject_combined_dlc_4"
-type = 1
-destination = 3
-source = 0
-sequence = 49
-data = [64, 3, 12, 0]
-valid = false
-result = 1
-
-[[commands]]
-name = "enter_safe_ch0"
+name = "enter_safe"
 type = 0
 destination = 3
 source = 0
-sequence = 50
-data = [0]
+sequence = 43
+data = []
 valid = true
+
+[[commands]]
+name = "reject_phase_dlc_2"
+type = 2
+destination = 3
+source = 0
+sequence = 44
+data = [128, 0]
+valid = false
+result = 1
+
+[[commands]]
+name = "reject_vga_attenuation_24"
+type = 3
+destination = 3
+source = 0
+sequence = 45
+data = [24]
+valid = false
+result = 2
+
+[[commands]]
+name = "reject_combined_dlc_3"
+type = 1
+destination = 3
+source = 0
+sequence = 46
+data = [64, 12, 0]
+valid = false
+result = 1
+
+[[commands]]
+name = "reject_enter_safe_payload"
+type = 0
+destination = 3
+source = 0
+sequence = 47
+data = [0]
+valid = false
+result = 1

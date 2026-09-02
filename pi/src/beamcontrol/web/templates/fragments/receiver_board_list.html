@@ -12,7 +12,7 @@
       <div><dt>Last seen</dt><dd id="node-{{ node.node_id }}-last-seen">{{ node.last_seen }}</dd></div>
     </dl>
     <p id="node-{{ node.node_id }}-error" class="node-error"{% if not node.error %} hidden{% endif %}>{{ node.error or "" }}</p>
-    <p class="channel-note">RF channels 0–3 are local to this board.</p>
+    <p class="channel-note">One receiver board is one RF chain.</p>
   </article>
   {% endfor %}
 </div>

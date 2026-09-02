@@ -3,16 +3,16 @@
 
 from __future__ import annotations
 
+import os
 import subprocess
 import sys
+from pathlib import Path
 
 COMMANDS = (
     ("discover",),
     ("ping", "1"),
-    ("set-phase", "1", "--state", "128", "--channel", "2"),
-    ("set-phase", "1", "--states", "1", "2", "3", "4"),
-    ("set-vga", "1", "--attenuation", "8", "--channel", "2"),
-    ("set-vga", "1", "--attenuations", "8", "9", "10", "11"),
+    ("set-phase", "1", "--state", "128"),
+    ("set-vga", "1", "--attenuation", "8"),
     (
         "set-combined",
         "1",
@@ -20,32 +20,25 @@ COMMANDS = (
         "128",
         "--attenuation",
         "8",
-        "--channel",
-        "2",
     ),
-    (
-        "set-combined",
-        "1",
-        "--states",
-        "1",
-        "2",
-        "3",
-        "4",
-        "--attenuations",
-        "8",
-        "9",
-        "10",
-        "11",
-    ),
-    ("enter-safe", "1", "--channel", "2"),
+    ("enter-safe", "1"),
 )
 
 
 def main() -> None:
+    environment = os.environ.copy()
+    source_root = Path(__file__).resolve().parents[1] / "pi" / "src"
+    existing_pythonpath = environment.get("PYTHONPATH")
+    environment["PYTHONPATH"] = (
+        f"{source_root}{os.pathsep}{existing_pythonpath}"
+        if existing_pythonpath
+        else str(source_root)
+    )
     for command in COMMANDS:
         completed = subprocess.run(
             [sys.executable, "-m", "beamcontrol.cli", *command, "--dry-run"],
             check=True,
+            env=environment,
             text=True,
             capture_output=True,
         )

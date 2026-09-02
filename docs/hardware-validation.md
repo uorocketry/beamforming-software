@@ -41,7 +41,7 @@ Capture CS, SCK, and data.
 - [ ] Data is LSB-first.
 - [ ] CS timing meets datasheet.
 - [ ] Measured attenuation matches every setting `0..23` dB.
-- [ ] Each channel selector reaches the intended F0480 only.
+- [ ] PA15 chip select reaches the board's single F0480.
 - [ ] Pre-write timeout leaves CS high.
 - [ ] In-flight timeout does not intentionally latch partial data before reset.
 
@@ -53,7 +53,7 @@ Capture LE, SCK, data, and serial-select.
 - [ ] LE idle high and low during transfer.
 - [ ] CPOL=0, CPHA=0.
 - [ ] Thirteen clocks per word.
-- [ ] State 146 -> `0x08D`; address 3 -> `0x162C`.
+- [ ] State 146 -> `0x08D`; schematic-selected address 1 -> `0x1628`.
 - [ ] Phase/address fields use required order.
 - [ ] Representative states match `docs/PE44820_Lookup_2.4GHz.csv`, including OPT.
 - [ ] LE timing meets datasheet.
@@ -73,7 +73,7 @@ Capture LE, SCK, data, and serial-select.
 - [ ] Valid unicast gets sequence-matched ACK.
 - [ ] Invalid DLC/value gets sequence-matched ERROR.
 - [ ] Broadcast safe changes all nodes with no responses.
-- [ ] Individual and bulk phase/VGA/combined payloads verified.
+- [ ] Phase, VGA, and combined single-chain payloads verified.
 - [ ] Phase changes apply 23 dB before phase and restore/apply afterward.
 - [ ] RX overflow appears in STATUS.
 - [ ] TX exhaustion appears in STATUS.

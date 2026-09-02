@@ -42,6 +42,24 @@ wsl --install -d Ubuntu
 
 Use a path such as `~/src/beamforming-software`, not `/mnt/c/...`.
 
+## macOS limitation
+
+`make setup` is not supported on macOS. The pinned bootstrap currently contains Linux
+archive names for both `uv` and the ARM GNU toolchain. Do not copy a Linux `.tools/`
+directory to macOS or attempt to execute its binaries.
+
+For documentation, Python, protocol, and native C work, install a native `uv` separately
+and override the Make variable:
+
+```bash
+make UV="$(command -v uv)" pi-sync
+make UV="$(command -v uv)" pi-lint pi-test pi-command-smoke protocol-check
+make stm32-test
+```
+
+Build release firmware on Linux/WSL2 or the Raspberry Pi workflow until Darwin archives
+and pinned checksums are implemented in the bootstrap scripts.
+
 ## Diagnostics
 
 ```bash

@@ -1,13 +1,11 @@
-"""BeamControl CAN protocol v2.1 constants and helpers (29-bit extended @ 500 kbit/s).
+"""BeamControl CAN protocol v3.0 constants and helpers (29-bit extended @ 500 kbit/s).
 
 See docs/can-protocol.md for the full spec.
 """
 
 from __future__ import annotations
 
-from collections.abc import Sequence
-
-PROTOCOL_VERSION = (2, 1, 0)
+PROTOCOL_VERSION = (3, 0, 0)
 
 # --- Identifier bit fields (29-bit extended) ---
 TYPE_SHIFT = 26
@@ -45,8 +43,6 @@ RES_BROADCAST_NOT_ALLOWED = 7
 
 # Field limits
 PHASE_STATE_MAX = 255  # logical index into the receiver's calibrated phase lookup
-RF_CHANNEL_COUNT = 4
-PHASE_ADDR_MAX = RF_CHANNEL_COUNT - 1
 ATTEN_DB_MAX = 23  # F0480 supports every 1 dB step from 0 through 23 dB
 
 
@@ -70,36 +66,6 @@ def parse_id(can_id: int) -> dict:
         "source": (can_id >> SOURCE_SHIFT) & SOURCE_MASK,
         "sequence": can_id & SEQ_MASK,
     }
-
-
-def validate_channel(channel: int) -> None:
-    if (
-        not isinstance(channel, int)
-        or isinstance(channel, bool)
-        or not (0 <= channel <= PHASE_ADDR_MAX)
-    ):
-        raise ValueError(f"channel must be 0..{PHASE_ADDR_MAX}")
-
-
-def _validated_four(name: str, values: Sequence[int], maximum: int) -> bytes:
-    try:
-        items = list(values)
-    except TypeError as exc:
-        raise ValueError(f"{name} must contain exactly {RF_CHANNEL_COUNT} values") from exc
-    if len(items) != RF_CHANNEL_COUNT:
-        raise ValueError(f"{name} must contain exactly {RF_CHANNEL_COUNT} values")
-    for value in items:
-        if not isinstance(value, int) or isinstance(value, bool) or not (0 <= value <= maximum):
-            raise ValueError(f"each {name} value must be 0..{maximum}")
-    return bytes(items)
-
-
-def validate_phase_states(phase_states: Sequence[int]) -> bytes:
-    return _validated_four("phase_states", phase_states, PHASE_STATE_MAX)
-
-
-def validate_attenuations(attenuation_db: Sequence[int]) -> bytes:
-    return _validated_four("attenuation_db", attenuation_db, ATTEN_DB_MAX)
 
 
 def _validated_value(name: str, value: int, maximum: int) -> int:

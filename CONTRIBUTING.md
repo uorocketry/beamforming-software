@@ -27,7 +27,7 @@ Before a PR:
 
 - Run `make check`.
 - Add Python tests under `pi/tests/`.
-- For protocol changes, edit `protocol/v2.1-vectors.toml` and run `python3 tools/generate-protocol-vectors.py`.
+- For protocol changes, edit `protocol/v3.0-vectors.toml` and run `python3 tools/generate-protocol-vectors.py`.
 - Keep queue/priority logic in host-testable `can_tx_queue.c/h`.
 
 ## Style

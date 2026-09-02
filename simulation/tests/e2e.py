@@ -84,19 +84,10 @@ def main() -> int:
         assert status.version == P.PROTOCOL_VERSION
         assert status.node_id == 1
 
-        assert client.set_phase(1, [128, 64, 32, 16]) == bytes([P.SET_PHASE, P.RES_OK])
-        assert client.set_vga(1, [8, 9, 10, 11]) == bytes([P.SET_VGA, P.RES_OK])
-        assert client.set_combined(
-            1,
-            [64, 65, 66, 67],
-            [12, 13, 14, 15],
-        ) == bytes([P.SET_COMBINED, P.RES_OK])
-        assert client.set_phase_channel(1, 2, 146) == bytes([P.SET_PHASE, P.RES_OK])
-        assert client.set_vga_channel(1, 1, 7) == bytes([P.SET_VGA, P.RES_OK])
-        assert client.set_combined_channel(1, 0, 32, 6) == bytes(
-            [P.SET_COMBINED, P.RES_OK]
-        )
-        assert client.enter_safe(1, 1) == bytes([P.ENTER_SAFE, P.RES_OK])
+        assert client.set_phase(1, 128) == bytes([P.SET_PHASE, P.RES_OK])
+        assert client.set_vga(1, 8) == bytes([P.SET_VGA, P.RES_OK])
+        assert client.set_combined(1, 64, 12) == bytes([P.SET_COMBINED, P.RES_OK])
+        assert client.enter_safe(1) == bytes([P.ENTER_SAFE, P.RES_OK])
     finally:
         transport.close()
 
@@ -106,59 +97,31 @@ def main() -> int:
     assert snapshot["configuration"]["target_nodes"] == [1]
     assert snapshot["nodes"][0]["node_id"] == 1
     assert snapshot["nodes"][0]["health"] == "healthy"
-    assert snapshot["nodes"][0]["protocol_version"] == "2.1.0"
+    assert snapshot["nodes"][0]["protocol_version"] == "3.0.0"
 
     text = wait_for_log("SIM_SPI2 offset=0xC value=0x1628")
 
     # Actual STM32 data-register writes. The expected order mirrors the
-    # control planner comments: startup, bulk phase, bulk VGA, combined safe
-    # transition, and finally one-channel ENTER_SAFE.
+    # control planner comments: startup, phase, VGA, combined safe transition,
+    # and finally ENTER_SAFE.
     assert_subsequence(
         values(text, "SPI1", 0xC),
         [
+            0x5C,  # startup safe attenuation
+            0x20,  # SET_VGA: 8 dB
             0x5C,
-            0x5C,
-            0x5C,
-            0x5C,  # startup: 23 dB requested for channels 1..4
-            0x20,
-            0x24,
-            0x28,
-            0x2C,  # SET_VGA: 8, 9, 10, 11 dB
-            0x5C,
-            0x5C,
-            0x5C,
-            0x5C,  # SET_COMBINED stage 1: maximum attenuation
-            0x30,
-            0x34,
-            0x38,
-            0x3C,  # bulk combined stage 3: 12, 13, 14, 15 dB
-            0x5C,
-            0x38,  # individual phase: protect and restore channel 3
-            0x1C,  # individual VGA: 7 dB on channel 2
-            0x5C,
-            0x18,  # individual combined: protect then apply 6 dB on channel 1
-            0x5C,  # ENTER_SAFE channel 2
+            0x30,  # SET_COMBINED: protect, then 12 dB
+            0x5C,  # ENTER_SAFE
         ],
         "VGA SPI writes",
     )
     assert_subsequence(
         values(text, "SPI2", 0xC),
         [
-            0x1628,
-            0x1624,
-            0x162C,
-            0x1622,  # startup: calibrated state 146, addresses 1..4
-            0x17C8,
-            0x0054,
-            0x008C,
-            0x0102,  # SET_PHASE: states 128, 64, 32, 16
-            0x0058,
-            0x0F94,
-            0x085C,
-            0x1852,  # bulk combined: states 64, 65, 66, 67
-            0x162C,  # individual phase: state 146, address 3
-            0x0088,  # individual combined: state 32, address 1
-            0x0004,  # ENTER_SAFE: state 0, address 2
+            0x1628,  # startup: calibrated state 146, address 1
+            0x17C8,  # SET_PHASE: state 128, address 1
+            0x0058,  # SET_COMBINED: state 64, address 1
+            0x0008,  # ENTER_SAFE: state 0, address 1
         ],
         "phase-shifter SPI writes",
     )
@@ -167,14 +130,14 @@ def main() -> int:
     gpio_a = values(text, "GPIOA", 0x18)
     gpio_b = values(text, "GPIOB", 0x18)
     gpio_c = values(text, "GPIOC", 0x18)
-    assert_subsequence(gpio_a, [0x10, 0x100000, 0x10], "VGA chip-select GPIO")
+    assert_subsequence(gpio_a, [0x8000, 0x80000000, 0x8000], "VGA chip-select GPIO")
     assert_subsequence(gpio_b, [0x1000, 0x10000000, 0x1000], "phase latch GPIO")
-    assert 0x400 in gpio_c, f"phase serial-select was not driven high: {gpio_c!r}"
+    assert 0x80 in gpio_c, f"phase serial-select was not driven high: {gpio_c!r}"
 
     print("BeamControl virtual end-to-end test passed")
     print("  real Python controller and FastAPI dashboard: healthy")
-    print("  real STM32F072 ELF in Renode: protocol v2.1 node 1")
-    print("  SocketCAN round trips: discovery, individual/bulk RF updates, safe")
+    print("  real STM32F072 ELF in Renode: protocol v3.0 node 1")
+    print("  SocketCAN round trips: discovery, RF updates, safe")
     print("  SPI/GPIO transaction sequence: verified")
     return 0
 

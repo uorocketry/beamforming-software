@@ -68,45 +68,43 @@ def test_set_phase_round_trip(buses):
     driver.start()
     try:
         client = BeamControlClient(VirtualTransport(ctrl), timeout=0.5, retries=1)
-        phases = [128, 64, 32, 16]
-        out = client.set_phase(3, phases)
+        out = client.set_phase(3, 128)
         assert out == bytes([P.SET_PHASE, P.RES_OK])
         f = P.parse_id(fake.seen[0].arbitration_id)
         assert f["type"] == P.SET_PHASE
         assert f["dest"] == 3 and f["source"] == 0
-        assert bytes(fake.seen[0].data) == bytes(phases)
+        assert bytes(fake.seen[0].data) == bytes([128])
     finally:
         driver.stop()
 
 
-def test_individual_round_trips(buses):
+def test_rf_command_round_trips(buses):
     ctrl, node = buses
     fake = FakeBeamControlNode(node, 3)
     driver = NodeDriver(fake)
     driver.start()
     try:
         client = BeamControlClient(VirtualTransport(ctrl), timeout=0.5, retries=0)
-        assert client.set_phase_channel(3, 2, 128) == bytes([P.SET_PHASE, P.RES_OK])
-        assert client.set_vga_channel(3, 1, 8) == bytes([P.SET_VGA, P.RES_OK])
-        assert client.set_combined_channel(3, 3, 64, 12) == bytes([P.SET_COMBINED, P.RES_OK])
+        assert client.set_phase(3, 128) == bytes([P.SET_PHASE, P.RES_OK])
+        assert client.set_vga(3, 8) == bytes([P.SET_VGA, P.RES_OK])
+        assert client.set_combined(3, 64, 12) == bytes([P.SET_COMBINED, P.RES_OK])
         assert [bytes(message.data) for message in fake.seen[:3]] == [
-            bytes([128, 2]),
-            bytes([8, 1]),
-            bytes([64, 3, 12]),
+            bytes([128]),
+            bytes([8]),
+            bytes([64, 12]),
         ]
     finally:
         driver.stop()
 
 
-def test_invalid_bulk_payload_rejected_client_side(buses):
-    """Invalid bulk lengths are rejected before any CAN traffic."""
+def test_invalid_phase_rejected_client_side(buses):
     ctrl, node = buses
     driver = NodeDriver(FakeBeamControlNode(node, 3))
     driver.start()
     try:
         client = BeamControlClient(VirtualTransport(ctrl), timeout=0.5, retries=0)
         with pytest.raises(ValueError):
-            client.set_phase(3, [128, 64, 32])
+            client.set_phase(3, 256)
     finally:
         driver.stop()
 

@@ -6,9 +6,6 @@
 _Static_assert(CAN_MESSAGE_TYPE_COUNT == 8,
                "The CAN ID allocates exactly three bits to message type.");
 
-_Static_assert(RF_CHANNEL_COUNT == 4,
-               "BeamControl protocol requires exactly four RF channels.");
-
 static void can_protocol_clear_frame(can_frame_t *frame)
 {
     memset(frame, 0, sizeof(*frame));
@@ -16,17 +13,10 @@ static void can_protocol_clear_frame(can_frame_t *frame)
     frame->remote = false;
 }
 
-static can_decode_result_t can_protocol_decode_enter_safe(
-    const can_frame_t *frame,
-    can_command_t *command)
+static can_decode_result_t can_protocol_decode_enter_safe(const can_frame_t *frame)
 {
     if (frame->length != CAN_ENTER_SAFE_LENGTH) {
         return CAN_DECODE_INVALID_LENGTH;
-    }
-
-    command->channel = frame->data[0];
-    if (command->channel > RF_CHANNEL_MAX) {
-        return CAN_DECODE_INVALID_PAYLOAD;
     }
 
     return CAN_DECODE_OK;
@@ -36,36 +26,14 @@ static can_decode_result_t can_protocol_decode_set_combined(
     const can_frame_t *frame,
     can_command_t *command)
 {
-    if (frame->length == CAN_SET_COMBINED_INDIVIDUAL_LENGTH) {
-        command->channel = frame->data[1];
-        if (command->channel > RF_CHANNEL_MAX
-            || frame->data[2] > VGA_MAX_ATTENUATION_DB) {
-            return CAN_DECODE_INVALID_PAYLOAD;
-        }
-
-        command->phase_states[command->channel] = frame->data[0];
-        command->attenuation_db[command->channel] = frame->data[2];
-        command->bulk_update = false;
-        return CAN_DECODE_OK;
-    }
-
-    if (frame->length != CAN_SET_COMBINED_BULK_LENGTH) {
+    if (frame->length != CAN_SET_COMBINED_LENGTH) {
         return CAN_DECODE_INVALID_LENGTH;
     }
-
-    memcpy(command->phase_states, frame->data, RF_CHANNEL_COUNT);
-    memcpy(
-        command->attenuation_db,
-        &frame->data[RF_CHANNEL_COUNT],
-        RF_CHANNEL_COUNT);
-
-    for (uint8_t channel = 0u; channel < RF_CHANNEL_COUNT; ++channel) {
-        if (command->attenuation_db[channel] > VGA_MAX_ATTENUATION_DB) {
-            return CAN_DECODE_INVALID_PAYLOAD;
-        }
+    if (frame->data[1] > VGA_MAX_ATTENUATION_DB) {
+        return CAN_DECODE_INVALID_PAYLOAD;
     }
-
-    command->bulk_update = true;
+    command->phase_state = frame->data[0];
+    command->attenuation_db = frame->data[1];
     return CAN_DECODE_OK;
 }
 
@@ -73,23 +41,10 @@ static can_decode_result_t can_protocol_decode_set_phase(
     const can_frame_t *frame,
     can_command_t *command)
 {
-    if (frame->length == CAN_SET_PHASE_INDIVIDUAL_LENGTH) {
-        command->channel = frame->data[1];
-        if (command->channel > RF_CHANNEL_MAX) {
-            return CAN_DECODE_INVALID_PAYLOAD;
-        }
-
-        command->phase_states[command->channel] = frame->data[0];
-        command->bulk_update = false;
-        return CAN_DECODE_OK;
-    }
-
-    if (frame->length != CAN_SET_PHASE_BULK_LENGTH) {
+    if (frame->length != CAN_SET_PHASE_LENGTH) {
         return CAN_DECODE_INVALID_LENGTH;
     }
-
-    memcpy(command->phase_states, frame->data, RF_CHANNEL_COUNT);
-    command->bulk_update = true;
+    command->phase_state = frame->data[0];
     return CAN_DECODE_OK;
 }
 
@@ -97,30 +52,13 @@ static can_decode_result_t can_protocol_decode_set_vga(
     const can_frame_t *frame,
     can_command_t *command)
 {
-    if (frame->length == CAN_SET_VGA_INDIVIDUAL_LENGTH) {
-        command->channel = frame->data[1];
-        if (command->channel > RF_CHANNEL_MAX
-            || frame->data[0] > VGA_MAX_ATTENUATION_DB) {
-            return CAN_DECODE_INVALID_PAYLOAD;
-        }
-
-        command->attenuation_db[command->channel] = frame->data[0];
-        command->bulk_update = false;
-        return CAN_DECODE_OK;
-    }
-
-    if (frame->length != CAN_SET_VGA_BULK_LENGTH) {
+    if (frame->length != CAN_SET_VGA_LENGTH) {
         return CAN_DECODE_INVALID_LENGTH;
     }
-
-    memcpy(command->attenuation_db, frame->data, RF_CHANNEL_COUNT);
-    for (uint8_t channel = 0u; channel < RF_CHANNEL_COUNT; ++channel) {
-        if (command->attenuation_db[channel] > VGA_MAX_ATTENUATION_DB) {
-            return CAN_DECODE_INVALID_PAYLOAD;
-        }
+    if (frame->data[0] > VGA_MAX_ATTENUATION_DB) {
+        return CAN_DECODE_INVALID_PAYLOAD;
     }
-
-    command->bulk_update = true;
+    command->attenuation_db = frame->data[0];
     return CAN_DECODE_OK;
 }
 
@@ -284,7 +222,7 @@ can_decode_result_t can_protocol_decode_command(
 
     switch (type) {
     case CAN_MESSAGE_ENTER_SAFE:
-        return can_protocol_decode_enter_safe(frame, command);
+        return can_protocol_decode_enter_safe(frame);
 
     case CAN_MESSAGE_SET_COMBINED:
         return can_protocol_decode_set_combined(frame, command);

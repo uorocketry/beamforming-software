@@ -57,6 +57,8 @@ def setup() -> None:
             "1",
             "restart-ms",
             "100",
+            "loopback",
+            "off",
         ]
     )
     run([IP, "link", "set", INTERFACE, "up"])

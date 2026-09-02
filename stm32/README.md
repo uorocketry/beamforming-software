@@ -1,14 +1,15 @@
 # STM32 receiver firmware
 
-Bare-metal C/libopencm3 firmware for STM32F072R8T6. Each board is one CAN node (`1..30`) with four RF channels (`0..3`).
+Bare-metal C/libopencm3 firmware for STM32F072R8T6. Each board is one CAN node
+(`1..30`) controlling one PE44820/F0480 RF chain.
 
 ## Behavior
 
 - 48 MHz system clock from 16 MHz HSE / PLL x3, with bounded HSI48 fallback
 - watchdog and retained fault/reset record
 - safe maximum-attenuation startup
-- CAN protocol 2.1 from controller node `0`
-- individual and bulk phase/VGA updates
+- CAN protocol 3.0 from controller node `0`
+- single-chain phase/VGA updates selected by CAN node ID
 - attenuation before phase changes
 - filtered RX, prioritized TX, replay-safe retries, bus-off recovery
 
@@ -38,10 +39,14 @@ make check
 | Flash / RAM | 64 KiB / 16 KiB |
 | Clock | 16 MHz HSE / PLL x3 -> 48 MHz system clock; HSI48 fallback |
 | CAN | 2.0B extended, 500 kbit/s, PA11/PA12 AF4 |
-| Phase bus | SPI2 |
-| VGA bus | SPI1 |
+| Phase bus | SPI2 AF0, PB13 clock / PB15 data, PB12 LE |
+| Phase mode/address | PC7 high for serial; address `1` via PA4 high |
+| VGA bus | SPI1 AF0, PB3 clock / PB5 data, PA15 CS |
 
 Both RF buses are transmit-only. ACK means the STM32 completed the transfer, not that an RF IC accepted or applied it.
+
+Firmware images are node-specific. `BEAMFORMER_NODE_ID` is compiled into the image;
+do not flash the same node ID onto two boards sharing a CAN bus.
 
 ## Source map
 

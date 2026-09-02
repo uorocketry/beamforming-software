@@ -23,7 +23,8 @@ sudo modprobe vcan   # when built as a module
 make simulation-test
 ```
 
-The test verifies dashboard health, protocol 2.1 discovery, individual and bulk RF commands, safe mode, ACKs, SPI words, and GPIO latch/CS writes.
+The test verifies dashboard health, protocol 3.0 discovery, single-chain RF
+commands, safe mode, ACKs, SPI words, and GPIO latch/CS writes.
 
 Interactive mode:
 

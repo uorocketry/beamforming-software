@@ -1,4 +1,4 @@
-"""BeamControlClient: drive BeamControl receiver boards over CAN per protocol v2.1.
+"""BeamControlClient: drive BeamControl receiver boards over CAN per protocol v3.0.
 
 Contract (must hold for the firmware's single-entry replay cache to be safe):
 - At most one state-changing transaction outstanding per receiver node.
@@ -15,7 +15,7 @@ from __future__ import annotations
 
 import threading
 import time
-from collections.abc import Callable, Sequence
+from collections.abc import Callable
 from dataclasses import dataclass
 from typing import Any
 
@@ -165,52 +165,24 @@ class BeamControlClient:
             raise BeamControlError(f"timeout node {destination}; final state unknown")
         raise BeamControlError(f"timeout node {destination}; final state unknown")
 
-    def enter_safe(self, destination: int, channel: int) -> bytes:
-        P.validate_channel(channel)
-        return self._transact(destination, P.ENTER_SAFE, [channel])
+    def enter_safe(self, destination: int) -> bytes:
+        return self._transact(destination, P.ENTER_SAFE, [])
 
-    def set_phase(self, destination: int, phase_states: Sequence[int]) -> bytes:
-        return self._transact(destination, P.SET_PHASE, P.validate_phase_states(phase_states))
-
-    def set_phase_channel(self, destination: int, channel: int, phase_state: int) -> bytes:
-        P.validate_channel(channel)
+    def set_phase(self, destination: int, phase_state: int) -> bytes:
         P.validate_phase_state(phase_state)
-        return self._transact(destination, P.SET_PHASE, [phase_state, channel])
+        return self._transact(destination, P.SET_PHASE, [phase_state])
 
-    def set_vga(self, destination: int, attenuation_db: Sequence[int]) -> bytes:
-        return self._transact(destination, P.SET_VGA, P.validate_attenuations(attenuation_db))
-
-    def set_vga_channel(self, destination: int, channel: int, attenuation_db: int) -> bytes:
-        P.validate_channel(channel)
+    def set_vga(self, destination: int, attenuation_db: int) -> bytes:
         P.validate_attenuation(attenuation_db)
-        return self._transact(destination, P.SET_VGA, [attenuation_db, channel])
+        return self._transact(destination, P.SET_VGA, [attenuation_db])
 
-    def set_combined(
-        self, destination: int, phase_states: Sequence[int], attenuation_db: Sequence[int]
-    ) -> bytes:
-        phase_payload = P.validate_phase_states(phase_states)
-        vga_payload = P.validate_attenuations(attenuation_db)
-        return self._transact(destination, P.SET_COMBINED, phase_payload + vga_payload)
-
-    def set_combined_channel(
-        self,
-        destination: int,
-        channel: int,
-        phase_state: int,
-        attenuation_db: int,
-    ) -> bytes:
-        P.validate_channel(channel)
+    def set_combined(self, destination: int, phase_state: int, attenuation_db: int) -> bytes:
         P.validate_phase_state(phase_state)
         P.validate_attenuation(attenuation_db)
-        return self._transact(
-            destination,
-            P.SET_COMBINED,
-            [phase_state, channel, attenuation_db],
-        )
+        return self._transact(destination, P.SET_COMBINED, [phase_state, attenuation_db])
 
-    def broadcast_enter_safe(self, channel: int) -> None:
+    def broadcast_enter_safe(self) -> None:
         """Broadcast ENTER_SAFE to all nodes (dest 31). No response is sent."""
-        P.validate_channel(channel)
         with self._io_lock:
             message = can.Message(
                 arbitration_id=P.build_id(
@@ -218,7 +190,7 @@ class BeamControlClient:
                 ),
                 is_extended_id=True,
                 is_remote_frame=False,
-                data=bytes([channel]),
+                data=b"",
             )
             self._transport.send(message)
 
@@ -236,33 +208,36 @@ class BeamControlClient:
             is_remote_frame=False,
             data=bytearray(),
         )
-        self._transport.send(msg)
-        deadline = self._clock() + self._timeout
-        while self._clock() < deadline:
-            reply = self._transport.recv(timeout=max(0.0, deadline - self._clock()))
-            if reply is None or not reply.is_extended_id or reply.is_remote_frame:
-                continue
-            f = P.parse_id(reply.arbitration_id)
-            if (
-                f["source"] != destination
-                or f["dest"] != self._source
-                or f["type"] != P.STATUS
-                or f["sequence"] != sequence
-            ):
-                continue
-            d = bytes(reply.data)
-            if len(d) != 8:
-                raise BeamControlProtocolError("STATUS must have DLC 8")
-            if d[3] != destination:
-                continue
-            return NodeStatus(
-                d[0],
-                d[1],
-                d[2],
-                d[3],
-                d[4],
-                d[5],
-                d[6],
-                d[7],
-            )
+        for _ in range(self._retries + 1):
+            # Reuse the exact PING on retry so a delayed STATUS can still be
+            # matched and captures have one stable request identity.
+            self._transport.send(msg)
+            deadline = self._clock() + self._timeout
+            while self._clock() < deadline:
+                reply = self._transport.recv(timeout=max(0.0, deadline - self._clock()))
+                if reply is None or not reply.is_extended_id or reply.is_remote_frame:
+                    continue
+                f = P.parse_id(reply.arbitration_id)
+                if (
+                    f["source"] != destination
+                    or f["dest"] != self._source
+                    or f["type"] != P.STATUS
+                    or f["sequence"] != sequence
+                ):
+                    continue
+                d = bytes(reply.data)
+                if len(d) != 8:
+                    raise BeamControlProtocolError("STATUS must have DLC 8")
+                if d[3] != destination:
+                    continue
+                return NodeStatus(
+                    d[0],
+                    d[1],
+                    d[2],
+                    d[3],
+                    d[4],
+                    d[5],
+                    d[6],
+                    d[7],
+                )
         raise BeamControlError(f"no STATUS from node {destination}")

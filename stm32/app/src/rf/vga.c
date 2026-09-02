@@ -11,6 +11,7 @@ void f0480spisetup(void)
 {
     rcc_periph_clock_enable(RCC_SPI1);
     rcc_periph_clock_enable(RCC_GPIOA);
+    rcc_periph_clock_enable(RCC_GPIOB);
 
     gpio_set(BOARD_VGA_CS_PORT, BOARD_VGA_CS_PIN);
     gpio_mode_setup(BOARD_VGA_CS_PORT, GPIO_MODE_OUTPUT, GPIO_PUPD_NONE, BOARD_VGA_CS_PIN);
@@ -46,27 +47,8 @@ void f0480spisetup(void)
     spi_enable(SPI1);
 }
 
-spi_guard_status_t vga_write(
-    uint8_t channel,
-    uint8_t command,
-    uint32_t timeout_millis)
+spi_guard_status_t vga_write(uint8_t command, uint32_t timeout_millis)
 {
-    if (channel >= RF_CHANNEL_COUNT) {
-        return SPI_GUARD_INVALID_ARGUMENT;
-    }
-
-    /*
-     * The protocol carries four independent VGA values and the RF planner
-     * preserves the channel number for every write. The checked-in C board pin
-     * map, however, names only one F0480 chip-select line (PA4) and does not
-     * identify the selector pins needed to route that CS to one of four chips.
-     *
-     * Keep the channel in this API so the final PCB selector can be added here
-     * without changing the CAN/runtime layers. Until that net mapping is added,
-     * the physical transfer below still uses the documented PA4 line.
-     */
-    (void)channel;
-
     spi_guard_status_t status = spi_guard_wait_txe(SPI1, timeout_millis);
     if (status != SPI_GUARD_OK) {
         return status;

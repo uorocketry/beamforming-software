@@ -4,7 +4,9 @@ CAN carries logical values; STM32 builds device serial words.
 
 ## PE44820
 
-Each phase value is a `0..255` lookup index. Firmware maps it to a calibrated 2.4 GHz `optimizedPhaseState_e` value from `rf/phase_states_2_4ghz.h`:
+Each receiver board contains one PE44820. A phase value is a `0..255` lookup
+index. Firmware maps it to a calibrated 2.4 GHz `optimizedPhaseState_e` value
+from `rf/phase_states_2_4ghz.h`:
 
 ```text
 bit 8     OPT
@@ -29,7 +31,10 @@ command =
   | reverseBits(address, 4)
 ```
 
-Example: index `146` -> word `0b010001101` (`0x08D`); address `3` -> command `0x162C`.
+The R2A schematic connects PE44820 address pins A0..A3 to PA4, PA5, PA6,
+and PC4. Firmware selects serial mode on PC7 and drives static unit address 1
+(A0 high, A1..A3 low). Example: index `146` -> word `0b010001101`
+(`0x08D`); address `1` -> command `0x1628`.
 
 CANDev-compatible names retained: `optimizedPhaseState_e`, `GetOptimizedPhaseState()`, `reverseBits()`, `MakePSCommand()`, `pe448spisetup()`.
 
@@ -49,7 +54,8 @@ command = attenuation_db << 2
 | 16 | `0x40` |
 | 23 | `0x5C` |
 
-The driver retains channel `0..3`, but the checked-in board map identifies only SPI1 and PA4 CS. Add the final four-device selector net mapping in `vga.c`; do not infer pins.
+The R2A schematic contains one F0480. Its SPI1 nets are PA15 chip select,
+PB3 clock, and PB5 data.
 
 ## ACK limit
 

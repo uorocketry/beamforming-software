@@ -58,3 +58,5 @@ def test_setup_renames_physical_can0_and_configures_it(
     assert configure[:6] == [CONFIGURE_CAN.IP, "link", "set", "beamcan0", "type", "can"]
     assert "500000" in configure
     assert "0.875" in configure
+    loopback_index = configure.index("loopback")
+    assert configure[loopback_index + 1] == "off"

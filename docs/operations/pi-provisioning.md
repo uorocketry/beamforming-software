@@ -148,3 +148,23 @@ Endpoints:
 | `/healthz` | Process liveness |
 | `/readyz` | CAN/receiver readiness |
 | `/api/docs` | FastAPI docs |
+
+## Troubleshooting
+
+| Symptom | Check | Interpretation/action |
+|:--|:--|:--|
+| `beamcan0` missing | `systemctl status beamcontrol-can.service` and its journal | Confirm overlays, reboot after provisioning, and verify the HAT SPI parent |
+| CAN `waiting` / `ENOBUFS` | Termination, CANH/CANL/ground, receiver power, bitrate | The Pi transmitted without another controller acknowledging the frame |
+| Web online, controller offline | `ip link`, both service journals, `/api/status` | HTTP process is healthy but SocketCAN is unavailable |
+| Board offline | `beamctl ping <node>` and unique firmware node IDs | Node did not return a valid protocol-3.0 STATUS frame |
+| Board reports incompatible version | Reflash the receiver and deploy matching Pi software | Protocol versions must match exactly; there is no compatibility mode |
+| Service does not survive reboot | `systemctl is-enabled beamcontrol-can.service beamcontrol.service` | The installer normally enables both units; re-run installation if disabled |
+| Dashboard reachable on untrusted LAN | Inspect `web_host` | Bind to `127.0.0.1` and use the documented SSH tunnel |
+
+Useful logs:
+
+```bash
+sudo journalctl -b -u beamcontrol-can.service --no-pager
+sudo journalctl -b -u beamcontrol.service --no-pager
+ip -details -statistics link show beamcan0
+```

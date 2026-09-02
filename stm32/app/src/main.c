@@ -26,6 +26,21 @@
 
 static void service_without_can(void) __attribute__((noreturn));
 
+static void execute_startup_operation_or_fail(
+    const rf_operation_t *operation,
+    uint16_t *phase_command,
+    uint8_t *vga_command)
+{
+    const firmware_fault_t fault = rf_execute_operation(
+        operation,
+        SPI_TIMEOUT_MILLIS,
+        phase_command,
+        vga_command);
+    if (fault != FIRMWARE_FAULT_NONE) {
+        firmware_fail(fault);
+    }
+}
+
 static void service_without_can(void)
 {
     while (1) {
@@ -92,22 +107,16 @@ int main(void)
     uint16_t phase_command = 0u;
     uint8_t vga_command = 0u;
 
-    /* The startup plan begins with one maximum-attenuation write per channel. */
-    for (uint8_t index = 0u; index < RF_CHANNEL_COUNT; ++index) {
-        rf_execute_operation(
-            &startup_plan.operations[index],
-            SPI_TIMEOUT_MILLIS,
-            &phase_command,
-            &vga_command);
-    }
+    /* The startup plan begins with maximum attenuation before phase changes. */
+    execute_startup_operation_or_fail(
+        &startup_plan.operations[0],
+        &phase_command,
+        &vga_command);
     retained_diagnostics_set_state(FIRMWARE_STATE_SAFE_OUTPUTS);
 
-    for (uint8_t index = RF_CHANNEL_COUNT;
-         index < startup_plan.operation_count;
-         ++index) {
-        rf_execute_operation(
+    for (uint8_t index = 1u; index < startup_plan.operation_count; ++index) {
+        execute_startup_operation_or_fail(
             &startup_plan.operations[index],
-            SPI_TIMEOUT_MILLIS,
             &phase_command,
             &vga_command);
     }

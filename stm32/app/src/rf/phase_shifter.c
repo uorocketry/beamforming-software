@@ -11,8 +11,25 @@
 void pe448spisetup(void)
 {
     rcc_periph_clock_enable(RCC_SPI2);
+    rcc_periph_clock_enable(RCC_GPIOA);
     rcc_periph_clock_enable(RCC_GPIOB);
     rcc_periph_clock_enable(RCC_GPIOC);
+
+    /* U2 is the only PE44820: serial mode, static address 1, OPT input low. */
+    gpio_clear(BOARD_PHASE_OPT_PORT, BOARD_PHASE_OPT_PIN);
+    gpio_clear(BOARD_PHASE_ADDRESS_LOW_PORT_A, BOARD_PHASE_ADDRESS_LOW_PINS_A);
+    gpio_clear(BOARD_PHASE_ADDRESS_LOW_PORT_C, BOARD_PHASE_ADDRESS_LOW_PINS_C);
+    gpio_set(BOARD_PHASE_ADDRESS_A0_PORT, BOARD_PHASE_ADDRESS_A0_PIN);
+    gpio_mode_setup(
+        BOARD_PHASE_OPT_PORT,
+        GPIO_MODE_OUTPUT,
+        GPIO_PUPD_NONE,
+        BOARD_PHASE_OPT_PIN | BOARD_PHASE_ADDRESS_LOW_PINS_A | BOARD_PHASE_ADDRESS_A0_PIN);
+    gpio_mode_setup(
+        BOARD_PHASE_ADDRESS_LOW_PORT_C,
+        GPIO_MODE_OUTPUT,
+        GPIO_PUPD_NONE,
+        BOARD_PHASE_ADDRESS_LOW_PINS_C);
 
     gpio_set(BOARD_PHASE_LE_PORT, BOARD_PHASE_LE_PIN);
     gpio_mode_setup(BOARD_PHASE_LE_PORT, GPIO_MODE_OUTPUT, GPIO_PUPD_NONE, BOARD_PHASE_LE_PIN);

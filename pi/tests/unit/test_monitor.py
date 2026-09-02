@@ -15,7 +15,7 @@ from beamcontrol.monitor import BeamControlMonitor, configured_node_failure
 class FakeClient:
     def discover(self, destination: int) -> NodeStatus:
         if destination == 1:
-            return NodeStatus(2, 1, 0, 1, 0, 0, 0, 0)
+            return NodeStatus(3, 0, 0, 1, 0, 0, 0, 0)
         raise BeamControlError(f"no STATUS from node {destination}")
 
 
@@ -98,12 +98,12 @@ def test_wrong_major_rejected() -> None:
 
 
 def test_newer_major_rejected() -> None:
-    assert configured_node_failure(3, NodeStatus(3, 0, 0, 3, 0, 0, 0, 0)) is not None
+    assert configured_node_failure(3, NodeStatus(4, 0, 0, 3, 0, 0, 0, 0)) is not None
 
 
 def test_wrong_minor_rejected() -> None:
-    assert configured_node_failure(3, NodeStatus(2, 0, 0, 3, 0, 0, 0, 0)) is not None
+    assert configured_node_failure(3, NodeStatus(3, 1, 0, 3, 0, 0, 0, 0)) is not None
 
 
 def test_exact_version_accepted() -> None:
-    assert configured_node_failure(3, NodeStatus(2, 1, 0, 3, 0, 0, 0, 0)) is None
+    assert configured_node_failure(3, NodeStatus(3, 0, 0, 3, 0, 0, 0, 0)) is None

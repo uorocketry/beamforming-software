@@ -6,11 +6,8 @@
 #include <stdbool.h>
 #include <stdint.h>
 
-/*
- * Worst case for a four-channel safe transition:
- *   4 writes to apply 23 dB + 4 phase writes + 4 final VGA writes.
- */
-#define RF_PLAN_MAX_OPERATIONS 12u
+/* Worst case: safe VGA, phase, then requested/restored VGA. */
+#define RF_PLAN_MAX_OPERATIONS 3u
 
 typedef enum rf_operation_type {
     RF_OPERATION_PHASE = 0,
@@ -19,14 +16,12 @@ typedef enum rf_operation_type {
 
 typedef struct rf_operation {
     rf_operation_type_t type;
-    uint8_t channel; /* zero-based RF channel 0..3 */
     uint16_t command;
 } rf_operation_t;
 
-/* Array index 0..3 always means physical RF channel 1..4. */
 typedef struct rf_state {
-    uint8_t phase_states[RF_CHANNEL_COUNT];
-    uint8_t attenuation_db[RF_CHANNEL_COUNT];
+    uint8_t phase_state;
+    uint8_t attenuation_db;
 } rf_state_t;
 
 typedef struct rf_plan {
