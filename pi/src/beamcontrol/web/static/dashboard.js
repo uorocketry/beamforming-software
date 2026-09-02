@@ -45,7 +45,17 @@ document.addEventListener("click", async (event) => {
     const result = await response.json();
     if (!response.ok) throw new Error(result.error || "Command failed");
     output.className = "command-result success";
-    output.textContent = "Acknowledged";
+    if (action === "safe") {
+      form.elements.phase_state.value = 0;
+      form.elements.attenuation_db.value = 23;
+      output.textContent = "Safe state acknowledged · phase 0 · 23 dB";
+    } else if (action === "phase") {
+      output.textContent = `Acknowledged · phase ${payload.phase_state}`;
+    } else if (action === "vga") {
+      output.textContent = `Acknowledged · ${payload.attenuation_db} dB`;
+    } else {
+      output.textContent = `Acknowledged · phase ${payload.phase_state} · ${payload.attenuation_db} dB`;
+    }
   } catch (error) {
     output.className = "command-result error";
     output.textContent = error.message;

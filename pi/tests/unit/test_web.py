@@ -143,6 +143,7 @@ def test_dashboard_routes_and_lifespan() -> None:
             assert script.status_code == 200
             assert 'EventSource("/events")' in script.text
             assert "setInterval" not in script.text
+            assert "Safe state acknowledged · phase 0 · 23 dB" in script.text
 
             status = await client.get("/api/status")
             assert status.status_code == 200
