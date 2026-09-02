@@ -54,27 +54,24 @@ events.addEventListener("update", (event) => {
   }
 });
 
-document.addEventListener("input", (event) => {
-  if (event.target.matches('.node-controls input[type="range"]')) updateSliderValue(event.target);
-});
+const applyTimers = new WeakMap();
 
-document.addEventListener("click", async (event) => {
-  const button = event.target.closest(".node-controls button");
-  if (!button) return;
-  const form = button.closest(".node-controls");
+async function sendCommand(form, action) {
   const output = form.querySelector(".command-result");
-  const action = button.dataset.action;
   const payload = { action };
-  if (action === "phase" || action === "combined") {
+  if (action === "combined") {
     payload.phase_state = Number(form.elements.phase_state.value);
-  }
-  if (action === "vga" || action === "combined") {
     payload.attenuation_db = Number(form.elements.attenuation_db.value);
   }
 
-  for (const control of form.querySelectorAll("button, input")) control.disabled = true;
+  if (form.dataset.sending === "true") {
+    form.dataset.queued = "true";
+    return;
+  }
+  form.dataset.sending = "true";
+  for (const button of form.querySelectorAll("button")) button.disabled = true;
   output.className = "command-result pending";
-  output.textContent = "Sending…";
+  output.textContent = action === "safe" ? "Applying safe state…" : "Applying…";
   try {
     const response = await fetch(`/api/nodes/${form.dataset.nodeId}/commands`, {
       method: "POST",
@@ -94,10 +91,6 @@ document.addEventListener("click", async (event) => {
       updateSliderValue(form.elements.phase_state);
       updateSliderValue(form.elements.attenuation_db);
       output.textContent = `Safe state acknowledged · ${phaseDescription(0)} · 23 dB`;
-    } else if (action === "phase") {
-      output.textContent = `Acknowledged · ${phaseDescription(payload.phase_state)}`;
-    } else if (action === "vga") {
-      output.textContent = `Acknowledged · ${payload.attenuation_db} dB`;
     } else {
       output.textContent = `Acknowledged · ${phaseDescription(payload.phase_state)} · ${payload.attenuation_db} dB`;
     }
@@ -105,6 +98,37 @@ document.addEventListener("click", async (event) => {
     output.className = "command-result error";
     output.textContent = error.detail ? `${error.message} ${error.detail}` : error.message;
   } finally {
-    for (const control of form.querySelectorAll("button, input")) control.disabled = false;
+    form.dataset.sending = "false";
+    for (const button of form.querySelectorAll("button")) button.disabled = false;
+    if (form.dataset.queued === "true") {
+      form.dataset.queued = "false";
+      void sendCommand(form, "combined");
+    }
   }
+}
+
+document.addEventListener("input", (event) => {
+  if (!event.target.matches('.node-controls input[type="range"]')) return;
+  updateSliderValue(event.target);
+  const form = event.target.closest(".node-controls");
+  const output = form.querySelector(".command-result");
+  output.className = "command-result pending";
+  output.textContent = "Waiting to apply…";
+  clearTimeout(applyTimers.get(form));
+  applyTimers.set(form, setTimeout(() => void sendCommand(form, "combined"), 150));
+});
+
+document.addEventListener("change", (event) => {
+  if (!event.target.matches('.node-controls input[type="range"]')) return;
+  const form = event.target.closest(".node-controls");
+  clearTimeout(applyTimers.get(form));
+  void sendCommand(form, "combined");
+});
+
+document.addEventListener("click", (event) => {
+  const button = event.target.closest('.node-controls button[data-action="safe"]');
+  if (!button) return;
+  const form = button.closest(".node-controls");
+  clearTimeout(applyTimers.get(form));
+  void sendCommand(form, "safe");
 });
