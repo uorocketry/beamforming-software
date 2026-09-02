@@ -1,5 +1,13 @@
 const events = new EventSource("/events");
 
+function updateSliderValue(input) {
+  const output = input.closest(".node-controls")?.querySelector(
+    `[data-value-for="${input.name}"]`,
+  );
+  if (!output) return;
+  output.textContent = input.name === "attenuation_db" ? `${input.value} dB` : input.value;
+}
+
 events.addEventListener("update", (event) => {
   const update = JSON.parse(event.data);
   const element = document.getElementById(update.id);
@@ -17,6 +25,10 @@ events.addEventListener("update", (event) => {
   if ("html" in update && element.innerHTML.trim() !== update.html.trim()) {
     element.innerHTML = update.html;
   }
+});
+
+document.addEventListener("input", (event) => {
+  if (event.target.matches('.node-controls input[type="range"]')) updateSliderValue(event.target);
 });
 
 document.addEventListener("click", async (event) => {
@@ -43,11 +55,17 @@ document.addEventListener("click", async (event) => {
       body: JSON.stringify(payload),
     });
     const result = await response.json();
-    if (!response.ok) throw new Error(result.error || "Command failed");
+    if (!response.ok) {
+      const error = new Error(result.error || "Command failed");
+      error.detail = result.detail;
+      throw error;
+    }
     output.className = "command-result success";
     if (action === "safe") {
       form.elements.phase_state.value = 0;
       form.elements.attenuation_db.value = 23;
+      updateSliderValue(form.elements.phase_state);
+      updateSliderValue(form.elements.attenuation_db);
       output.textContent = "Safe state acknowledged · phase 0 · 23 dB";
     } else if (action === "phase") {
       output.textContent = `Acknowledged · phase ${payload.phase_state}`;
@@ -58,7 +76,7 @@ document.addEventListener("click", async (event) => {
     }
   } catch (error) {
     output.className = "command-result error";
-    output.textContent = error.message;
+    output.textContent = error.detail ? `${error.message} ${error.detail}` : error.message;
   } finally {
     for (const control of form.querySelectorAll("button, input")) control.disabled = false;
   }

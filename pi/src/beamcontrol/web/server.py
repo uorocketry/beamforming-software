@@ -15,11 +15,22 @@ from fastapi.staticfiles import StaticFiles
 from fastapi.templating import Jinja2Templates
 from pydantic import BaseModel, Field, model_validator
 
+from .. import protocol as P
 from ..client import BeamControlError
 
 STATIC_DIR = Path(__file__).with_name("static")
 TEMPLATE_DIR = Path(__file__).with_name("templates")
 templates = Jinja2Templates(directory=TEMPLATE_DIR)
+
+RESULT_ERRORS = {
+    P.RES_BAD_LEN: "Receiver rejected the command payload length.",
+    P.RES_BAD_VALUE: "Receiver rejected a value as out of range.",
+    P.RES_UNSUPPORTED: "Receiver does not support this command.",
+    P.RES_HW_FAIL: "Receiver reported an RF hardware write failure.",
+    P.RES_BUSY: "Receiver is busy or in safe-state lockout.",
+    P.RES_SEQUENCE_REUSE: "Receiver rejected a reused command sequence.",
+    P.RES_BROADCAST_NOT_ALLOWED: "This command cannot be broadcast.",
+}
 
 Update = dict[str, object]
 UpdateSpec = tuple[object, Update]
@@ -266,8 +277,57 @@ def create_app(monitor: MonitorLike) -> FastAPI:
                 phase_state=command.phase_state,
                 attenuation_db=command.attenuation_db,
             )
-        except (BeamControlError, OSError, ValueError) as error:
-            return JSONResponse({"error": str(error)}, status_code=502)
+        except BeamControlError as error:
+            if error.result is not None:
+                message = RESULT_ERRORS.get(error.result, "Receiver rejected the command.")
+                return JSONResponse(
+                    {
+                        "error": message,
+                        "detail": (
+                            f"Result code {error.result}; the requested state was not applied."
+                        ),
+                        "code": "node_rejected",
+                    },
+                    status_code=409,
+                )
+            if "timeout" in str(error).lower() or "final state unknown" in str(error).lower():
+                return JSONResponse(
+                    {
+                        "error": f"No acknowledgement from SN{node_id:02d}.",
+                        "detail": (
+                            "The final RF state is unknown; check CAN health, then retry "
+                            "or use Safe state."
+                        ),
+                        "code": "timeout",
+                    },
+                    status_code=504,
+                )
+            return JSONResponse(
+                {
+                    "error": "CAN command failed.",
+                    "detail": str(error),
+                    "code": "can_error",
+                },
+                status_code=502,
+            )
+        except OSError as error:
+            return JSONResponse(
+                {
+                    "error": "CAN interface is unavailable.",
+                    "detail": str(error),
+                    "code": "can_unavailable",
+                },
+                status_code=503,
+            )
+        except ValueError as error:
+            return JSONResponse(
+                {
+                    "error": "Invalid command.",
+                    "detail": str(error),
+                    "code": "invalid_command",
+                },
+                status_code=422,
+            )
         return JSONResponse({"status": "acknowledged", "ack": ack.hex()})
 
     @app.get("/healthz")

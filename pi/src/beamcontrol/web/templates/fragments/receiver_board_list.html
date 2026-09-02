@@ -17,8 +17,14 @@
     <p id="node-{{ node.node_id }}-error" class="node-error"{% if not node.error %} hidden{% endif %}>{{ node.error or "" }}</p>
     <form class="node-controls" data-node-id="{{ node.node_id }}">
       <div class="control-fields">
-        <label>Phase <input name="phase_state" type="number" min="0" max="255" value="0" required /></label>
-        <label>Attenuation <span><input name="attenuation_db" type="number" min="0" max="23" value="23" required /> dB</span></label>
+        <label class="slider-control">
+          <span>Phase <output data-value-for="phase_state">0</output></span>
+          <input name="phase_state" type="range" min="0" max="255" step="1" value="0" required />
+        </label>
+        <label class="slider-control">
+          <span>Attenuation <output data-value-for="attenuation_db">23 dB</output></span>
+          <input name="attenuation_db" type="range" min="0" max="23" step="1" value="23" required />
+        </label>
       </div>
       <div class="control-actions">
         <button type="button" data-action="phase">Set phase</button>

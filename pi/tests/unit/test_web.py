@@ -8,6 +8,8 @@ from typing import Any
 
 import httpx
 
+from beamcontrol import protocol as P
+from beamcontrol.client import BeamControlError
 from beamcontrol.web.server import create_app, render_changed_updates
 
 
@@ -116,6 +118,8 @@ def test_dashboard_routes_and_lifespan() -> None:
             assert "Live telemetry" not in response.text
             assert "Receiver boards" in response.text
             assert "SN01" in response.text
+            assert 'name="phase_state" type="range" min="0" max="255"' in response.text
+            assert 'name="attenuation_db" type="range" min="0" max="23"' in response.text
             assert "One receiver board · one RF chain" in response.text
             assert "updates every 2 seconds" not in response.text
             assert "Live updates" not in response.text
@@ -144,6 +148,7 @@ def test_dashboard_routes_and_lifespan() -> None:
             assert 'EventSource("/events")' in script.text
             assert "setInterval" not in script.text
             assert "Safe state acknowledged · phase 0 · 23 dB" in script.text
+            assert "updateSliderValue" in script.text
 
             status = await client.get("/api/status")
             assert status.status_code == 200
@@ -154,6 +159,32 @@ def test_dashboard_routes_and_lifespan() -> None:
 
         assert monitor.started
         assert monitor.stopped
+
+    run(scenario())
+
+
+def test_command_errors_are_actionable() -> None:
+    class ErrorMonitor(FakeMonitor):
+        error: Exception = BeamControlError("node 1 error", result=P.RES_BUSY)
+
+        def command(self, *args: object, **kwargs: object) -> bytes:
+            raise self.error
+
+    async def scenario() -> None:
+        monitor = ErrorMonitor()
+        app = create_app(monitor)
+        transport = httpx.ASGITransport(app=app)
+        async with httpx.AsyncClient(transport=transport, base_url="http://test") as client:
+            rejected = await client.post("/api/nodes/1/commands", json={"action": "safe"})
+            assert rejected.status_code == 409
+            assert rejected.json()["code"] == "node_rejected"
+            assert "safe-state lockout" in rejected.json()["error"]
+
+            monitor.error = BeamControlError("timeout node 1; final state unknown")
+            timeout = await client.post("/api/nodes/1/commands", json={"action": "safe"})
+            assert timeout.status_code == 504
+            assert timeout.json()["code"] == "timeout"
+            assert timeout.json()["error"] == "No acknowledgement from SN01."
 
     run(scenario())
 
