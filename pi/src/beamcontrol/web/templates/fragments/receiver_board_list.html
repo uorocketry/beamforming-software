@@ -3,7 +3,10 @@
   {% for node in nodes %}
   <article id="node-{{ node.node_id }}-card" class="node-card {{ node.health }}">
     <div class="node-heading">
-      <div><span class="node-label">NODE</span><strong>{{ node.node_id }}</strong></div>
+      <div class="node-identity">
+        <span class="node-number">{{ "%02d"|format(node.node_id) }}</span>
+        <div><span class="node-label">Receiver node</span><strong>SN{{ "%02d"|format(node.node_id) }}</strong></div>
+      </div>
       <span id="node-{{ node.node_id }}-health" class="health-badge {{ node.health }}">{{ node.health }}</span>
     </div>
     <dl class="node-details">
@@ -12,7 +15,7 @@
       <div><dt>Last seen</dt><dd id="node-{{ node.node_id }}-last-seen">{{ node.last_seen }}</dd></div>
     </dl>
     <p id="node-{{ node.node_id }}-error" class="node-error"{% if not node.error %} hidden{% endif %}>{{ node.error or "" }}</p>
-    <p class="channel-note">One receiver board is one RF chain.</p>
+    <p class="channel-note"><span aria-hidden="true"></span>One receiver board · one RF chain</p>
   </article>
   {% endfor %}
 </div>
