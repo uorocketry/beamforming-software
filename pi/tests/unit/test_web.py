@@ -110,6 +110,7 @@ def test_dashboard_routes_and_lifespan() -> None:
             response = await client.get("/")
             assert response.status_code == 200
             assert "BeamControl" in response.text
+            assert "Raspberry Pi receiver control" not in response.text
             assert "Receiver network" not in response.text
             assert "Live system detail" not in response.text
             assert "Live telemetry" not in response.text

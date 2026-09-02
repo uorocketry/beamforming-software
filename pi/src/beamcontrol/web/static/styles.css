@@ -23,16 +23,12 @@ body { margin: 0; min-width: 320px; min-height: 100vh; color: var(--text); backg
   height: 60px;
   display: flex;
   align-items: center;
-  justify-content: space-between;
+  justify-content: flex-end;
   gap: 24px;
   padding: 0 24px;
   background: var(--surface);
   border-bottom: 1px solid var(--line);
 }
-.brand { display: flex; align-items: center; gap: 9px; }
-.brand-mark { width: 14px; height: 14px; background: var(--green); border-radius: 3px; box-shadow: 0 0 0 5px var(--green-soft); }
-.brand strong { display: block; font-size: 14px; letter-spacing: .01em; }
-.brand span { display: block; margin-top: 1px; color: var(--muted); font-size: 9px; }
 .status-cluster { display: flex; align-items: center; gap: 15px; }
 .service-status { display: grid; grid-template-columns: 6px auto; column-gap: 5px; align-items: center; }
 .service-status i { width: 6px; height: 6px; background: #76807b; }
@@ -126,7 +122,7 @@ body { margin: 0; min-width: 320px; min-height: 100vh; color: var(--text); backg
 
 @media (max-width: 760px) {
   .topbar { padding: 0 10px; }
-  .brand span, .status-cluster .service-status:first-child { display: none; }
+  .status-cluster .service-status:first-child { display: none; }
   .dashboard-page { padding: 0; }
   .page-heading { align-items: flex-start; flex-direction: column; gap: 5px; }
   .summary-grid { grid-template-columns: 1fr; }
