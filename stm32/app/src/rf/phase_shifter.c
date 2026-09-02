@@ -85,6 +85,8 @@ spi_guard_status_t phase_shifter_write(uint16_t command, uint32_t timeout_millis
     }
 
     gpio_clear(BOARD_PHASE_LE_PORT, BOARD_PHASE_LE_PIN);
+    /* Keep LE stably low before the first serial clock edge. */
+    board_control_line_margin();
     SPI_DR(SPI2) = command;
     __asm__ volatile("dsb" ::: "memory");
 

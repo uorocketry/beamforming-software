@@ -55,6 +55,11 @@ spi_guard_status_t vga_write(uint8_t command, uint32_t timeout_millis)
     }
 
     gpio_clear(BOARD_VGA_CS_PORT, BOARD_VGA_CS_PIN);
+    /*
+     * F0480 tA requires at least 10 ns from CSb falling to the first rising
+     * clock edge. Do not rely on compiler/instruction overhead for this.
+     */
+    board_control_line_margin();
     SPI_DR8(SPI1) = command;
     __asm__ volatile("dsb" ::: "memory");
 

@@ -40,6 +40,8 @@ Capture CS, SCK, and data.
 - [ ] 23 dB command is `0x5C`.
 - [ ] Data is LSB-first.
 - [ ] CS timing meets datasheet.
+- [x] Firmware explicitly delays between CSb falling and the first SPI clock
+  (F0480 tA >= 10 ns; two 48 MHz core cycles provide about 42 ns).
 - [ ] Measured attenuation matches every setting `0..23` dB.
 - [ ] PA15 chip select reaches the board's single F0480.
 - [ ] Pre-write timeout leaves CS high.
