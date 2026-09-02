@@ -1,4 +1,4 @@
-"""Read-only FastAPI dashboard tests."""
+"""FastAPI dashboard tests."""
 
 from __future__ import annotations
 
@@ -16,12 +16,24 @@ class FakeMonitor:
         self.health = health
         self.started = False
         self.stopped = False
+        self.commands: list[tuple[int, str, int | None, int | None]] = []
 
     def start(self) -> None:
         self.started = True
 
     def stop(self) -> None:
         self.stopped = True
+
+    def command(
+        self,
+        node: int,
+        action: str,
+        *,
+        phase_state: int | None = None,
+        attenuation_db: int | None = None,
+    ) -> bytes:
+        self.commands.append((node, action, phase_state, attenuation_db))
+        return b"\x01\x00"
 
     def snapshot(self) -> dict[str, object]:
         return {
@@ -107,6 +119,20 @@ def test_dashboard_routes_and_lifespan() -> None:
             assert "Live updates" not in response.text
             assert "data-refresh-url" not in response.text
             assert "/events" in {route.path for route in app.routes}
+
+            command = await client.post(
+                "/api/nodes/1/commands",
+                json={"action": "combined", "phase_state": 128, "attenuation_db": 8},
+            )
+            assert command.status_code == 200
+            assert command.json() == {"status": "acknowledged", "ack": "0100"}
+            assert monitor.commands == [(1, "combined", 128, 8)]
+
+            invalid = await client.post(
+                "/api/nodes/1/commands",
+                json={"action": "combined", "phase_state": 256, "attenuation_db": 8},
+            )
+            assert invalid.status_code == 422
 
             stylesheet = await client.get("/static/styles.css")
             assert stylesheet.status_code == 200

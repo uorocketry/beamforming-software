@@ -30,6 +30,14 @@ NO_CAN_ACK_MESSAGE = "Waiting for a CAN receiver."
 class ClientLike(Protocol):
     def discover(self, destination: int) -> NodeStatus: ...
 
+    def enter_safe(self, destination: int) -> bytes: ...
+
+    def set_phase(self, destination: int, phase_state: int) -> bytes: ...
+
+    def set_vga(self, destination: int, attenuation_db: int) -> bytes: ...
+
+    def set_combined(self, destination: int, phase_state: int, attenuation_db: int) -> bytes: ...
+
 
 ClientFactory = Callable[[BeamControlConfig], tuple[ClientLike, Callable[[], None]]]
 Clock = Callable[[], float]
@@ -178,6 +186,41 @@ class BeamControlMonitor:
             if self._revision == revision:
                 self._revision_condition.wait(timeout)
             return self._revision
+
+    def command(
+        self,
+        node: int,
+        action: str,
+        *,
+        phase_state: int | None = None,
+        attenuation_db: int | None = None,
+    ) -> bytes:
+        """Execute one validated receiver command using the monitor's serialized client."""
+        if not 1 <= node < P.BROADCAST_NODE:
+            raise ValueError("node must be 1..30")
+        client = self._client
+        if client is None:
+            raise BeamControlError(self._can_error or "CAN unavailable")
+
+        try:
+            if action == "safe":
+                result = client.enter_safe(node)
+            elif action == "phase" and phase_state is not None:
+                result = client.set_phase(node, phase_state)
+            elif action == "vga" and attenuation_db is not None:
+                result = client.set_vga(node, attenuation_db)
+            elif action == "combined" and phase_state is not None and attenuation_db is not None:
+                result = client.set_combined(node, phase_state, attenuation_db)
+            else:
+                raise ValueError("command payload is incomplete")
+        except (can.CanError, OSError) as error:
+            raise BeamControlError(str(error) or error.__class__.__name__) from error
+
+        self._record_event("success", f"Receiver node {node}: {action} command acknowledged")
+        with self._revision_condition:
+            self._revision += 1
+            self._revision_condition.notify_all()
+        return result
 
     def _run(self) -> None:
         try:

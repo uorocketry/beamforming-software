@@ -1,4 +1,4 @@
-"""FastAPI application for the read-only BeamControl status dashboard."""
+"""FastAPI application for the BeamControl status and command dashboard."""
 
 from __future__ import annotations
 
@@ -13,6 +13,9 @@ from fastapi import FastAPI, Request
 from fastapi.responses import JSONResponse, Response, StreamingResponse
 from fastapi.staticfiles import StaticFiles
 from fastapi.templating import Jinja2Templates
+from pydantic import BaseModel, Field, model_validator
+
+from ..client import BeamControlError
 
 STATIC_DIR = Path(__file__).with_name("static")
 TEMPLATE_DIR = Path(__file__).with_name("templates")
@@ -32,6 +35,38 @@ class MonitorLike(Protocol):
     def revision(self) -> int: ...
 
     def wait_for_update(self, revision: int, timeout: float) -> int: ...
+
+    def command(
+        self,
+        node: int,
+        action: str,
+        *,
+        phase_state: int | None = None,
+        attenuation_db: int | None = None,
+    ) -> bytes: ...
+
+
+class NodeCommand(BaseModel):
+    action: str
+    phase_state: int | None = Field(default=None, ge=0, le=255)
+    attenuation_db: int | None = Field(default=None, ge=0, le=23)
+
+    @model_validator(mode="after")
+    def validate_action_fields(self) -> NodeCommand:
+        required = {
+            "safe": (False, False),
+            "phase": (True, False),
+            "vga": (False, True),
+            "combined": (True, True),
+        }
+        if self.action not in required:
+            raise ValueError("action must be safe, phase, vga, or combined")
+        phase_required, attenuation_required = required[self.action]
+        if phase_required and self.phase_state is None:
+            raise ValueError("phase_state is required")
+        if attenuation_required and self.attenuation_db is None:
+            raise ValueError("attenuation_db is required")
+        return self
 
 
 def _text(value: object, class_name: str | None = None) -> UpdateSpec:
@@ -172,7 +207,7 @@ def create_app(monitor: MonitorLike) -> FastAPI:
 
     app = FastAPI(
         title="BeamControl",
-        description="Read-only Raspberry Pi receiver status",
+        description="Raspberry Pi receiver status and node-scoped controls",
         lifespan=lifespan,
         docs_url="/api/docs",
         redoc_url=None,
@@ -218,6 +253,22 @@ def create_app(monitor: MonitorLike) -> FastAPI:
     @app.get("/api/status")
     def api_status() -> dict[str, object]:
         return monitor.snapshot()
+
+    @app.post("/api/nodes/{node_id}/commands", response_model=None)
+    async def node_command(node_id: int, command: NodeCommand) -> Response:
+        if not 1 <= node_id <= 30:
+            return JSONResponse({"error": "node must be 1..30"}, status_code=422)
+        try:
+            ack = await asyncio.to_thread(
+                monitor.command,
+                node_id,
+                command.action,
+                phase_state=command.phase_state,
+                attenuation_db=command.attenuation_db,
+            )
+        except (BeamControlError, OSError, ValueError) as error:
+            return JSONResponse({"error": str(error)}, status_code=502)
+        return JSONResponse({"status": "acknowledged", "ack": ack.hex()})
 
     @app.get("/healthz")
     def healthz() -> dict[str, str]:

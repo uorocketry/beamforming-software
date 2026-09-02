@@ -18,3 +18,38 @@ events.addEventListener("update", (event) => {
     element.innerHTML = update.html;
   }
 });
+
+document.addEventListener("click", async (event) => {
+  const button = event.target.closest(".node-controls button");
+  if (!button) return;
+  const form = button.closest(".node-controls");
+  const output = form.querySelector(".command-result");
+  const action = button.dataset.action;
+  const payload = { action };
+  if (action === "phase" || action === "combined") {
+    payload.phase_state = Number(form.elements.phase_state.value);
+  }
+  if (action === "vga" || action === "combined") {
+    payload.attenuation_db = Number(form.elements.attenuation_db.value);
+  }
+
+  for (const control of form.querySelectorAll("button, input")) control.disabled = true;
+  output.className = "command-result pending";
+  output.textContent = "Sending…";
+  try {
+    const response = await fetch(`/api/nodes/${form.dataset.nodeId}/commands`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(payload),
+    });
+    const result = await response.json();
+    if (!response.ok) throw new Error(result.error || "Command failed");
+    output.className = "command-result success";
+    output.textContent = "Acknowledged";
+  } catch (error) {
+    output.className = "command-result error";
+    output.textContent = error.message;
+  } finally {
+    for (const control of form.querySelectorAll("button, input")) control.disabled = false;
+  }
+});
