@@ -1,11 +1,38 @@
 const events = new EventSource("/events");
+const calibratedPhaseDegrees = [];
+
+fetch("/static/phase_lookup_2_4ghz.csv")
+  .then((response) => {
+    if (!response.ok) throw new Error("Phase calibration table unavailable");
+    return response.text();
+  })
+  .then((csv) => {
+    for (const row of csv.trim().split(/\r?\n/).slice(1)) {
+      const columns = row.split(",");
+      calibratedPhaseDegrees[Number(columns[0])] = Number(columns[6]);
+    }
+    for (const input of document.querySelectorAll('.node-controls input[name="phase_state"]')) {
+      updateSliderValue(input);
+    }
+  })
+  .catch(() => {
+    // The target angle remains available from the uniformly spaced state index.
+  });
+
+function phaseDescription(state) {
+  const calibrated = calibratedPhaseDegrees[state];
+  const degrees = Number.isFinite(calibrated) ? calibrated : state * 360 / 256;
+  return `${degrees.toFixed(2)}° (state ${state})`;
+}
 
 function updateSliderValue(input) {
   const output = input.closest(".node-controls")?.querySelector(
     `[data-value-for="${input.name}"]`,
   );
   if (!output) return;
-  output.textContent = input.name === "attenuation_db" ? `${input.value} dB` : input.value;
+  output.textContent = input.name === "attenuation_db"
+    ? `${input.value} dB`
+    : phaseDescription(Number(input.value));
 }
 
 events.addEventListener("update", (event) => {
@@ -66,13 +93,13 @@ document.addEventListener("click", async (event) => {
       form.elements.attenuation_db.value = 23;
       updateSliderValue(form.elements.phase_state);
       updateSliderValue(form.elements.attenuation_db);
-      output.textContent = "Safe state acknowledged · phase 0 · 23 dB";
+      output.textContent = `Safe state acknowledged · ${phaseDescription(0)} · 23 dB`;
     } else if (action === "phase") {
-      output.textContent = `Acknowledged · phase ${payload.phase_state}`;
+      output.textContent = `Acknowledged · ${phaseDescription(payload.phase_state)}`;
     } else if (action === "vga") {
       output.textContent = `Acknowledged · ${payload.attenuation_db} dB`;
     } else {
-      output.textContent = `Acknowledged · phase ${payload.phase_state} · ${payload.attenuation_db} dB`;
+      output.textContent = `Acknowledged · ${phaseDescription(payload.phase_state)} · ${payload.attenuation_db} dB`;
     }
   } catch (error) {
     output.className = "command-result error";

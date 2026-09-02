@@ -119,6 +119,7 @@ def test_dashboard_routes_and_lifespan() -> None:
             assert "Receiver boards" in response.text
             assert "SN01" in response.text
             assert 'name="phase_state" type="range" min="0" max="255"' in response.text
+            assert "Phase at 2.4 GHz" in response.text
             assert 'name="attenuation_db" type="range" min="0" max="23"' in response.text
             assert "One receiver board · one RF chain" in response.text
             assert "updates every 2 seconds" not in response.text
@@ -147,8 +148,13 @@ def test_dashboard_routes_and_lifespan() -> None:
             assert script.status_code == 200
             assert 'EventSource("/events")' in script.text
             assert "setInterval" not in script.text
-            assert "Safe state acknowledged · phase 0 · 23 dB" in script.text
+            assert "phase_lookup_2_4ghz.csv" in script.text
+            assert "phaseDescription" in script.text
             assert "updateSliderValue" in script.text
+
+            phase_lookup = await client.get("/static/phase_lookup_2_4ghz.csv")
+            assert phase_lookup.status_code == 200
+            assert "146,10010010,205.3125,209.73,141,010001101,205" in phase_lookup.text
 
             status = await client.get("/api/status")
             assert status.status_code == 200
