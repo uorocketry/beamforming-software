@@ -45,7 +45,7 @@ body { margin: 0; min-width: 320px; min-height: 100vh; color: var(--text); backg
 .dashboard-page {
   width: 100%;
   min-height: calc(100vh - 60px);
-  padding: 20px 22px 32px;
+  padding: 0;
   background: var(--surface);
 }
 .page-heading, .card-heading, .section-heading, .node-heading { display: flex; align-items: center; justify-content: space-between; gap: 16px; }
@@ -88,7 +88,7 @@ body { margin: 0; min-width: 320px; min-height: 100vh; color: var(--text); backg
 .command-result.success { color: var(--green); }
 .command-result.error { color: var(--red); }
 
-.workspace-grid { display: grid; grid-template-columns: minmax(0, 1fr) 350px; margin-top: 18px; border: 1px solid var(--line); }
+.workspace-grid { display: grid; grid-template-columns: minmax(0, 1fr) 350px; margin-top: -1px; border: 1px solid var(--line); }
 .receiver-panel, .events-panel { min-width: 0; background: var(--surface); }
 .receiver-panel > .section-heading, .events-panel > .section-heading { min-height: 64px; padding: 14px 16px; border-bottom: 1px solid var(--line); }
 .events-panel { border-left: 1px solid var(--line); }
@@ -127,7 +127,7 @@ body { margin: 0; min-width: 320px; min-height: 100vh; color: var(--text); backg
 @media (max-width: 760px) {
   .topbar { padding: 0 10px; }
   .brand span, .status-cluster .service-status:first-child { display: none; }
-  .dashboard-page { padding: 12px; }
+  .dashboard-page { padding: 0; }
   .page-heading { align-items: flex-start; flex-direction: column; gap: 5px; }
   .summary-grid { grid-template-columns: 1fr; }
   .summary-card + .summary-card, .summary-card:nth-child(3) { grid-column: auto; border-top: 1px solid var(--line); border-left: 0; }
