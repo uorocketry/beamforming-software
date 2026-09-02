@@ -111,7 +111,7 @@ def test_dashboard_routes_and_lifespan() -> None:
             assert response.status_code == 200
             assert "BeamControl" in response.text
             assert "Receiver network" in response.text
-            assert "Live telemetry" in response.text
+            assert "Live telemetry" not in response.text
             assert "Receiver boards" in response.text
             assert "SN01" in response.text
             assert "One receiver board · one RF chain" in response.text
